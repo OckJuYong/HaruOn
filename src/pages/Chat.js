@@ -244,7 +244,7 @@ export default function Chat() {
     const id = await ensureConversation();
 
     const summaryPrompt =
-      '지금까지의 대화를 5줄로 한국어 요약해줘. 핵심 감정/이벤트/할 일도 포함해줘.';
+      'Context: "자 너는 10년 경력의 심리상담사야 단 너는 우울증 환자들을 대상으로 대답을 하는것이 아닌 일반인을 대상으로 진행하는거야", Propt: "지금까지의 대화를 200자 이내 한국어로 요약해주고 내용의 핵심이 되는 부분들로 다음에 다시 확인했을 때 가독성이 좋아야해" 그리고 니가 작성한 글의 내용을 제외하고 사용자가 입력한 내용으로만 요약을 진행해줘';
 
     let summaryText = '';
     setLoading(true);
@@ -275,7 +275,7 @@ export default function Chat() {
     const tImg = performance.now();
     try {
       const concise = sanitizeSummary(summaryText);
-      const imagePrompt = '다음 요약을 따뜻한 일러스트 한 장으로 표현해줘.';
+      const imagePrompt = '다음 3줄 요약본을 분석하고 상황을 사람이아닌 귀여운 캐릭터로 그려주고 그림을 그릴때는 이전에 그렸던 그림과 너무 유사하지않은 방향으로 그려줘 그림은 가로형식으로 그려주고 그림은 니가 답변한 내용말고 사용자가 입력한 내용만 분석해서 그려줘';
       logGroup(labelImg, () => logReq(labelImg, {
         conversation_id: `[REDACTED summary: len=${concise.length}]`,
         prompt: '[REDACTED imagePrompt]'
