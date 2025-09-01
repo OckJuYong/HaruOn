@@ -284,7 +284,7 @@ export default function Chat() {
       // ✅ 오버레이 켜기
       setImgOverlay(true);
 
-      const img = await createImage({ conversation_id: concise, prompt: imagePrompt });
+      const img = await createImage({ conversation_id: id, prompt: imagePrompt });
       logRes(labelImg, img, tImg);
 
       // UI 알림 (채팅창에도 간단히)
