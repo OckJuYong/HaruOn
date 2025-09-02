@@ -10,8 +10,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // --- Authentication Functions ---
-export const signUp = async (email, password) => {
-  const { user, session, error } = await supabase.auth.signUp({ email, password });
+export const signUp = async (userData) => {
+  const { email, password, nickname } = userData;
+  const { user, session, error } = await supabase.auth.signUp({ 
+    email, 
+    password,
+    options: {
+      data: {
+        nickname: nickname
+      }
+    }
+  });
   if (error) throw error;
   return { user, session };
 };
