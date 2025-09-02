@@ -97,7 +97,8 @@ export const createImage = async ({ conversation_id, prompt }) => {
 // --- Health Check ---
 export const healthz = async () => {
   try {
-    const { error } = await supabase.functions.invoke('healthz-check');
+    // 간단한 Supabase 연결 테스트로 대체
+    const { error } = await supabase.from('conversations').select('count').limit(1);
     if (error) throw error;
     return { ok: true, status: 200 };
   } catch (error) {
