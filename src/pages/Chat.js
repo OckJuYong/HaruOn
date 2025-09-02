@@ -243,14 +243,16 @@ export default function Chat() {
         throw new Error('로그인이 필요한 기능입니다.');
       }
 
-      // 개인화된 메시지 생성
-      const personalizedMessages = generatePersonalizedMessages(text);
+      // 개인화된 메시지 생성 (임시로 간단한 형태 사용)
+      const simpleMessages = {
+        items: [...msgs]
+      };
       
       const payload = { 
         conversation_id: id, 
         user_id: user.id, 
         content: text,
-        messages: personalizedMessages 
+        messages: simpleMessages 
       };
       logGroup(label, () => logReq(label, { ...payload, content: safeText(payload.content) }));
 
