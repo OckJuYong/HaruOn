@@ -12,7 +12,15 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt } = await req.json()
+    const { prompt, conversation_id } = await req.json()
+    
+    // 필수 파라미터 검증
+    if (!prompt) {
+      throw new Error('prompt is required')
+    }
+    if (!conversation_id) {
+      throw new Error('conversation_id is required')
+    }
     
     // OpenAI DALL-E API 호출
     const openaiResponse = await fetch('https://api.openai.com/v1/images/generations', {

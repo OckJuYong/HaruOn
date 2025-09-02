@@ -1,16 +1,14 @@
-// src/setupProxy.js
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 module.exports = function (app) {
   app.use(
-    ['/healthz', '/v1', '/docs', '/openapi.json'],
+    '/functions', // Proxy requests to /functions
     createProxyMiddleware({
-      target: 'http://54.180.8.10',
+      target: process.env.REACT_APP_SUPABASE_URL, // Use Supabase URL from env
       changeOrigin: true,
-      secure: false,
-      logLevel: 'debug', // ← debug로 변경
+      secure: false, // Allow self-signed certs for local dev if needed
+      logLevel: 'debug',
       onProxyRes(proxyRes, req) {
-        // 상태코드/경로 간단 로깅
         console.log('[proxy]', req.method, req.url, '→', proxyRes.statusCode);
       },
       onError(err, req, res) {

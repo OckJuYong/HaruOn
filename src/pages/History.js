@@ -1,17 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import TopBar from '../components/TopBar';
 import NavBar from '../components/NavBar';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import { getConversation, deleteConversationApi } from '../api/api';
+import { deleteConversationApi, listConversations, getConversationSummary } from '../api/api';
+import { useApp } from '../context/AppProvider';
 
-// ===== localStorage helpers =====
-function getSummariesMap() {
-  try { return JSON.parse(localStorage.getItem('summariesByCid') || '{}'); } catch { return {}; }
-}
-function getRecentCids() {
-  try { return JSON.parse(localStorage.getItem('recentCids') || '[]'); } catch { return []; }
-}
+// Note: Removed localStorage helpers - now using Supabase directly
 
 // ===== UI helpers =====
 const fmtDate = (isoOrTs) => {
@@ -74,59 +69,64 @@ function Modal({ open, onClose, children }) {
 }
 
 export default function History() {
-  const [ids, setIds] = useState(() => getRecentCids());
-  const [items, setItems] = useState([]); // [{ id, title?, created_at?, updated_at? }]
+  const { user } = useApp();
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [summariesMap, setSummariesMap] = useState({});
 
   // modal state
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(null); // { id, summary, image_url, period }
 
-  const summariesMap = useMemo(() => getSummariesMap(), [ids]);
-
   const refresh = useCallback(async () => {
-    if (!ids.length) { setItems([]); return; }
+    if (!user?.id) { setItems([]); return; }
     setLoading(true);
     try {
-      const results = await Promise.all(ids.map((id) => getConversation(id).catch(() => null)));
-      const list = results.flatMap((res) => {
-        if (!res) return [];
-        if (res.items) return res.items; // { items: [{ id, title, created_at, updated_at? }] }
-        if (res.id) return [{ id: res.id, title: res.title, created_at: res.created_at, updated_at: res.updated_at }];
-        return [];
-      });
-      // 유지되는 순서: ids와 동일한 순서로 재정렬
-      const byId = Object.fromEntries(list.map(x => [x.id, x]));
-      const ordered = ids.map(id => byId[id]).filter(Boolean);
-      setItems(ordered);
+      // Get user's conversations from Supabase
+      const conversations = await listConversations(user.id);
+      setItems(conversations || []);
+      
+      // Load summaries for each conversation
+      const summaries = {};
+      await Promise.all(
+        (conversations || []).map(async (conv) => {
+          try {
+            const summary = await getConversationSummary(conv.id);
+            if (summary) {
+              summaries[conv.id] = summary;
+            }
+          } catch (error) {
+            console.error(`Failed to load summary for ${conv.id}:`, error);
+          }
+        })
+      );
+      setSummariesMap(summaries);
+    } catch (error) {
+      console.error('Failed to load conversations:', error);
     } finally {
       setLoading(false);
     }
-  }, [ids]);
+  }, [user]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
   const onRemove = async (id) => {
     const ok = window.confirm('이 대화방을 삭제할까요?');
     if (!ok) return;
-    await deleteConversationApi(id);
-    const next = ids.filter((x) => x !== id);
-    setIds(next);
-    localStorage.setItem('recentCids', JSON.stringify(next));
-    // 요약도 제거
-    const map = getSummariesMap();
-    if (map[id]) {
-      delete map[id];
-      localStorage.setItem('summariesByCid', JSON.stringify(map));
+    try {
+      await deleteConversationApi(id);
+      refresh(); // Reload from database
+      // 모달이 해당 cid를 보고 있다면 닫기
+      if (active?.id === id) setOpen(false);
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+      alert('삭제 중 오류가 발생했습니다.');
     }
-    refresh();
-    // 모달이 해당 cid를 보고 있다면 닫기
-    if (active?.id === id) setOpen(false);
   };
 
   const handleOpenModal = (item) => {
-    const meta = summariesMap[item.id]; // { summary, image_url, ts }
-    const period = fmtPeriod(item.created_at, item.updated_at, meta?.ts);
+    const meta = summariesMap[item.id]; // { summary, image_url, created_at }
+    const period = fmtPeriod(item.created_at, item.updated_at, meta?.created_at);
     setActive({
       id: item.id,
       summary: meta?.summary || '(요약 없음)',
@@ -144,8 +144,8 @@ export default function History() {
         {!loading && items.length === 0 && <div>최근 항목이 없습니다.</div>}
 
         {items.map((it) => {
-          const meta = summariesMap[it.id]; // { summary, image_url, ts }
-          const period = fmtPeriod(it.created_at, it.updated_at, meta?.ts);
+          const meta = summariesMap[it.id]; // { summary, image_url, created_at }
+          const period = fmtPeriod(it.created_at, it.updated_at, meta?.created_at);
 
           // 화면 요구사항: "그림, 기간만" 노출
           return (

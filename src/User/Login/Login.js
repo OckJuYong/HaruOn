@@ -25,7 +25,7 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await signIn({ email, password });
+      await signIn(email, password);
       navigate("/home");
     } catch (err) {
       setError(getFriendlyErrorMessage(err.message));

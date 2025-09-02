@@ -4,28 +4,34 @@ import TopBar from '../components/TopBar';
 import NavBar from '../components/NavBar';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import { healthz, createConversation } from '../api/api';
+import { healthz, createConversation, getUserImages } from '../api/api';
 import { useNavigate } from 'react-router-dom';
+import { useApp } from '../context/AppProvider';
 
 export default function Home() {
   const navigate = useNavigate();
+  const { user } = useApp();
   const [ok, setOk] = useState('checking...');
   const [title, setTitle] = useState('');
-  const [recentImages, setRecentImages] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('recentImages') || '[]'); } catch { return []; }
-  });
+  const [recentImages, setRecentImages] = useState([]);
 
   useEffect(() => {
     healthz().then(() => setOk('온라인')).catch(() => setOk('오프라인'));
-  }, []);
+    
+    // Load user images from Supabase instead of localStorage
+    if (user?.id) {
+      getUserImages(user.id)
+        .then(images => setRecentImages(images))
+        .catch(console.error);
+    }
+  }, [user]);
 
   const onCreate = useCallback(async () => {
     if (!title.trim()) return alert('대화방 제목을 입력해주세요.');
-    // 로그인 전: user_id는 null로 보냄
-    const conv = await createConversation({ user_id: null, title: title.trim() });
+    const conv = await createConversation({ user_id: user?.id, title: title.trim() });
     // 백엔드 응답: { id, user_id, title }
     navigate(`/chat?cid=${encodeURIComponent(conv.id)}&t=${encodeURIComponent(conv.title)}`);
-  }, [title, navigate]);
+  }, [title, navigate, user?.id]);
 
   const latest = useMemo(() => recentImages.slice(0, 6), [recentImages]);
 
@@ -39,15 +45,9 @@ export default function Home() {
               <div style={{ fontSize: 14, opacity: 0.7 }}>백엔드 상태</div>
               <div style={{ fontSize: 18, fontWeight: 700 }}>{ok}</div>
             </div>
-            <a
-              href="/docs" /* 프록시 기준으로 접근하려면 /docs (개발시) */
-              onClick={(e) => { e.preventDefault(); window.open('http://54.180.8.10/docs', '_blank', 'noreferrer'); }}
-              rel="noreferrer"
-              style={{ fontSize: 13, textDecoration: 'none' }}
-              title="백엔드 문서 열기"
-            >
-              API 문서 열기 ↗
-            </a>
+            <div style={{ fontSize: 13, opacity: 0.7 }}>
+              Supabase 연동
+            </div>
           </div>
         </Card>
 

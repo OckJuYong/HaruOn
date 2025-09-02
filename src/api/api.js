@@ -1,9 +1,9 @@
 import {
   createConversation,
-  getConversations as listConversations,
+  listConversations,
   getConversation,
-  deleteConversation as deleteConversationApi,
-  getMessages as listMessages,
+  deleteConversationApi,
+  listMessages,
   healthz,
   chat,
   createImage,
@@ -12,7 +12,16 @@ import {
   signOut,
   getCurrentUser,
   resetPasswordForEmail,
-  onAuthStateChange
+  onAuthStateChange,
+  saveImageToDb,
+  getUserImages,
+  getUserProfile,
+  upsertUserProfile,
+  saveConversationSummary,
+  getConversationSummary,
+  getUserPersonalization,
+  updateUserPersonalization,
+  analyzeUserPatterns
 } from '../services/supabaseApi'
 
 export {
@@ -29,5 +38,14 @@ export {
   signOut,
   getCurrentUser,
   resetPasswordForEmail,
-  onAuthStateChange
+  onAuthStateChange,
+  saveImageToDb,
+  getUserImages,
+  getUserProfile,
+  upsertUserProfile,
+  saveConversationSummary,
+  getConversationSummary,
+  getUserPersonalization,
+  updateUserPersonalization,
+  analyzeUserPatterns
 }
