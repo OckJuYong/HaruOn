@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { content, messages } = await req.json()
+    const { content, messages, conversation_id, user_id } = await req.json()
     
     // 기존 방식과 동일하게 전체 메시지 컨텍스트 사용
     const chatMessages = messages?.items || []

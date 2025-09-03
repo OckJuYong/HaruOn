@@ -87,9 +87,9 @@ export const listMessages = async (conversationId) => {
 };
 
 // --- Edge Function Calls (assuming 'chat' and 'generate-image' are deployed as Edge Functions) ---
-export const chat = async (content, messages) => {
+export const chat = async (payload) => {
   const { data, error } = await supabase.functions.invoke('chat', {
-    body: { content, messages },
+    body: payload,
   });
   if (error) throw error;
   return data;
