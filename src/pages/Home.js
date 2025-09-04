@@ -1,5 +1,5 @@
 // 📁 src/pages/Home.jsx
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import TopBar from '../components/TopBar';
 import NavBar from '../components/NavBar';
 import Card from '../components/Card';
@@ -46,7 +46,8 @@ export default function Home() {
     }
   }, [user]);
 
-  const loadRecentConversations = async () => {
+  const loadRecentConversations = useCallback(async () => {
+    if (!user?.id) return;
     try {
       // Get user's conversations (최근 2개만)
       const conversations = await listConversations(user.id);
@@ -71,7 +72,7 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to load conversations:', error);
     }
-  };
+  }, [user?.id]);
 
   const onCreate = useCallback(async () => {
     if (!title.trim()) return alert('대화방 제목을 입력해주세요.');

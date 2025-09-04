@@ -301,71 +301,96 @@ export default function Chat() {
     return oneLine.length > MAX ? oneLine.slice(0, MAX) + '…' : oneLine;
   }
 
+  // 사용자 감정 분석 함수
+  function analyzeUserEmotion(userMessages) {
+    const recentMessages = userMessages.slice(-3).join(' ').toLowerCase();
+    
+    const emotionPatterns = {
+      angry: ['화나', '짜증', '열받', '빡쳐', '분해', '진짜', '미치겠', '너무해', '억울'],
+      sad: ['슬퍼', '우울', '힘들', '눈물', '속상', '기분이', '우울해', '외로', '허전'],
+      frustrated: ['답답', '막막', '스트레스', '짜증', '어려워', '모르겠', '안돼'],
+      happy: ['좋아', '행복', '기뻐', '신나', '최고', '완전', '대박', '성공', '즐거'],
+      excited: ['설레', '기대', '두근', '와', '대박', '완전', '진짜', '신기'],
+      worried: ['걱정', '불안', '무서', '떨려', '어떡하지', '망하면', '큰일'],
+      neutral: []
+    };
+
+    for (const [emotion, keywords] of Object.entries(emotionPatterns)) {
+      if (emotion === 'neutral') continue;
+      const matchCount = keywords.filter(keyword => recentMessages.includes(keyword)).length;
+      if (matchCount >= 1) return emotion;
+    }
+    
+    return 'neutral';
+  }
+
   // 사용자 맞춤형 시스템 프롬프트 생성
   function generatePersonalizedSystemPrompt(userPersonalization) {
-    if (!userPersonalization) return '';
-
-    const styleMap = {
-      friendly: '친근하고 친구 같은 말투로',
-      formal: '정중하고 예의 바른 말투로',
-      enthusiastic: '활발하고 열정적인 말투로'
-    };
+    if (!userPersonalization) return getDefaultSystemPrompt();
 
     const lengthMap = {
-      short: '간결하게 1-2문장으로',
-      medium: '적당한 길이로 2-3문장으로',
-      long: '상세하게 3-5문장으로'
+      short: '1-2문장',
+      medium: '2-3문장', 
+      long: '최대 5문장'
     };
 
-    const toneMap = {
-      warm: '따뜻하고 공감적인 톤으로',
-      neutral: '중립적이고 균형잡힌 톤으로',
-      supportive: '지지적이고 격려하는 톤으로'
-    };
+    let systemPrompt = `너는 사용자의 진짜 친한 친구야.
 
-    let systemPrompt = `당신은 사용자와 대화하는 친근한 AI 친구입니다.
+기본 규칙:
+- 답변은 ${lengthMap[userPersonalization.response_length] || '2-3문장'}으로 짧게 해줘
+- 딱딱한 존댓말 금지 ("해드리겠습니다", "말씀해주세요" 등 쓰지마)
+- 반말은 안되고, 친근한 존댓말 사용 ("~해요", "~예요", "~네요")
+- 실제 친구처럼 자연스럽게 반응해줘
+- 상황에 따라 감정을 진짜처럼 표현해줘 (화나면 같이 화내고, 슬프면 위로하고)
+- 과도하게 긍정적이거나 상담사처럼 말하지마
 
-대화 스타일: ${styleMap[userPersonalization.conversation_style] || '친근하고 친구 같은 말투로'} 대화해요.
-응답 길이: ${lengthMap[userPersonalization.response_length] || '적당한 길이로 2-3문장으로'} 답변해요.
-감정적 톤: ${toneMap[userPersonalization.emotional_tone] || '따뜻하고 공감적인 톤으로'} 응답해요.
+대화 예시:
+❌ 힘든 일이 있으셨군요. 어떤 일이 있었는지 자세히 말씀해주시면 도움을 드리겠습니다.
+✅ 어? 뭔일 있었어요? 누가 뭐라고 했나요?
 
-중요한 대화 방식:
-- "∼해드리겠습니다", "∼말씨해주세요" 같은 딱딱한 표현은 사용하지 마세요
-- 대신 "∼해요", "∼에요", "∼는 거 어떤세요?" 같은 친근한 말투를 사용하세요
-- 상대방과 티키타카하는 친구처럼 자연스럽게 대화하세요
-- 존댑어는 사용하되 심리상담사처럼 딱딱하지 말고 편안하게 대화하세요`;
+❌ 정말 기쁜 소식이시네요! 축하드립니다!
+✅ 와 진짜요?? 대박이네요! 축하해요!`;
 
     if (userPersonalization.topics_of_interest?.length > 0) {
-      systemPrompt += `\n관심 주제: 사용자는 주로 ${userPersonalization.topics_of_interest.join(', ')}에 관심이 많습니다.`;
+      systemPrompt += `\n\n관심사: ${userPersonalization.topics_of_interest.slice(0, 3).join(', ')} 얘기를 좋아해요.`;
     }
 
-    if (userPersonalization.recent_conversations_examples?.length > 0) {
-      systemPrompt += `\n\n최근 대화 패턴 예시:`;
-      userPersonalization.recent_conversations_examples.slice(0, 2).forEach((conv, index) => {
-        if (conv.user_messages?.length > 0) {
-          systemPrompt += `\n예시 ${index + 1}: 사용자가 "${conv.user_messages[0]}"와 같은 방식으로 말할 때, 비슷한 스타일로 응답해주세요.`;
-        }
-      });
-    }
-
-    systemPrompt += `\n\n위 정보를 바탕으로 사용자와 친구처럼 편안하고 자연스럽게 대화해요!`;
+    systemPrompt += `\n\n친구처럼 자연스럽게 대화하되, 너무 길게 말하지마!`;
 
     return systemPrompt;
+  }
+
+  // 기본 시스템 프롬프트
+  function getDefaultSystemPrompt() {
+    return `너는 사용자의 친한 친구야.
+
+기본 규칙:
+- 2-3문장으로 짧게 답변해줘
+- 친근한 존댓말 사용 ("~해요", "~예요")
+- 실제 친구처럼 자연스럽게 반응
+- 상황에 맞게 감정 표현 (화나면 같이 화내고, 슬프면 위로)
+- 과도하게 긍정적이지 말고 자연스럽게
+
+예시:
+"어떤 일 있었어요?" "와 진짜요?" "그럼 어떡해요?" "완전 짜증나겠다"
+
+친구처럼 자연스럽게 대화해줘!`;
   }
 
   // 개인화된 메시지 배열 생성
   function generatePersonalizedMessages(currentMessage) {
     const messages = [...msgs]; // 기존 대화 히스토리
 
-    // 시스템 프롬프트 추가 (개인화)
-    if (userPersonalization) {
-      const systemPrompt = generatePersonalizedSystemPrompt(userPersonalization);
-      if (systemPrompt) {
-        messages.unshift({
-          role: 'system',
-          content: systemPrompt
-        });
-      }
+    // 시스템 프롬프트 추가 (개인화 또는 기본)
+    const systemPrompt = userPersonalization ? 
+      generatePersonalizedSystemPrompt(userPersonalization) : 
+      getDefaultSystemPrompt();
+      
+    if (systemPrompt) {
+      messages.unshift({
+        role: 'system',
+        content: systemPrompt
+      });
     }
 
     return {
@@ -457,39 +482,31 @@ AI 응답: "${assistantResponse}"
     return match ? parseInt(match[1]) : null;
   };
 
-  // 한국어 요약을 영어로 번역하여 DALL-E에 최적화된 프롬프트 생성
-  function createOptimizedImagePrompt(koreanSummary) {
-    // 향상된 키워드 매핑 - 더 자연스럽고 긍정적인 번역
+  // 감정 기반 이미지 프롬프트 생성
+  function createEmotionBasedImagePrompt(koreanSummary, userMessages) {
+    // 사용자 감정 분석
+    const emotion = analyzeUserEmotion(userMessages);
+    
+    // 한국어 요약을 영어로 번역
     const translateToEnglish = (text) => {
       const keywordMap = {
-        // 감정 및 기분 - 긍정적으로 표현
         '기분': 'feeling', '감정': 'emotion', '행복': 'joy', '즐거운': 'delightful',
         '시원': 'refreshing', '즐겁': 'cheerful', '좋은': 'wonderful', '편안': 'peaceful',
         '따뜻': 'warm', '포근': 'cozy', '상쾌': 'fresh', '든든': 'comforting',
-        '고민': 'thoughtful moment', '어려움': 'challenge', '스트레스': 'busy time',
-        '힘든': 'difficult', '아쉬운': 'wistful', '슬픈': 'sad', '우울한': 'melancholy',
-        
-        // 일상 활동 - 더 생생하고 긍정적으로
-        '일상': 'daily adventure', '대화': 'heartfelt chat', '친구': 'dear friend', 
-        '가족': 'loved ones', '일': 'work journey', '공부': 'learning', '학습': 'discovery',
-        '휴식': 'peaceful rest', '음식': 'delicious meal', '요리': 'cooking joy',
-        '운동': 'active time', '산책': 'lovely walk', '여행': 'adventure', 
-        '집': 'cozy home', '독서': 'quiet reading', '영화': 'movie time',
-        
-        // 시간대 - 따뜻하게 표현
-        '아침': 'gentle morning', '점심': 'midday', '오후': 'peaceful afternoon',
-        '저녁': 'cozy evening', '밤': 'quiet night', '새벽': 'early dawn',
-        
-        // 장소 및 환경
-        '날씨': 'lovely weather', '비': 'gentle rain', '눈': 'soft snow', 
-        '바람': 'gentle breeze', '햇살': 'warm sunshine',
+        '고민': 'thoughtful', '어려움': 'difficult', '스트레스': 'stressful',
+        '힘든': 'tough', '아쉬운': 'regretful', '슬픈': 'sad', '우울한': 'melancholy',
+        '화나': 'angry', '짜증': 'annoyed', '열받': 'frustrated', '억울': 'unfair',
+        '일상': 'daily life', '대화': 'conversation', '친구': 'friend', 
+        '가족': 'family', '일': 'work', '공부': 'study', '학습': 'learning',
+        '휴식': 'rest', '음식': 'food', '요리': 'cooking',
+        '운동': 'exercise', '산책': 'walk', '여행': 'travel', 
+        '집': 'home', '독서': 'reading', '영화': 'movie',
+        '아침': 'morning', '점심': 'lunch', '오후': 'afternoon',
+        '저녁': 'evening', '밤': 'night', '새벽': 'dawn',
+        '날씨': 'weather', '비': 'rain', '눈': 'snow', 
+        '바람': 'wind', '햇살': 'sunlight',
         '봄': 'spring', '여름': 'summer', '가을': 'autumn', '겨울': 'winter',
-        '공원': 'peaceful park', '카페': 'cozy cafe', '도서관': 'quiet library',
-        
-        // 성장과 발전 - 매우 긍정적으로
-        '도전': 'new adventure', '성장': 'personal growth', '배우': 'learning',
-        '극복': 'overcoming', '성취': 'achievement', '발전': 'progress',
-        '변화': 'positive change', '계획': 'exciting plan'
+        '공원': 'park', '카페': 'cafe', '도서관': 'library'
       };
       
       let translated = text;
@@ -502,35 +519,83 @@ AI 응답: "${assistantResponse}"
 
     const englishSummary = translateToEnglish(koreanSummary);
     
-    return `Create an adorable, heartwarming kawaii-style illustration about: "${englishSummary}"
+    // 감정별 이미지 스타일 설정
+    const emotionStyles = {
+      angry: {
+        style: 'Bold, dynamic illustration with strong contrasts',
+        colors: 'Deep reds, oranges, and dramatic shadows with lightning or storm elements',
+        mood: 'Powerful, intense, like a thunderstorm - raw and honest emotions',
+        elements: 'Storm clouds, lightning, fire elements, dramatic landscapes, strong wind effects'
+      },
+      sad: {
+        style: 'Soft, melancholic watercolor illustration',
+        colors: 'Cool blues, gentle grays, muted purples with rain or misty elements',
+        mood: 'Quietly contemplative, like a rainy afternoon - gentle and understanding',
+        elements: 'Gentle rain, misty windows, soft clouds, calm water, quiet spaces'
+      },
+      frustrated: {
+        style: 'Slightly chaotic but artistic composition',
+        colors: 'Mixed warm and cool tones, oranges and blues creating tension',
+        mood: 'Complex emotions, like tangled thoughts slowly unraveling',
+        elements: 'Maze-like patterns, tangled lines that gradually straighten, puzzle pieces'
+      },
+      happy: {
+        style: 'Bright, cheerful illustration with dynamic energy',
+        colors: 'Vibrant yellows, warm oranges, bright greens with sunshine elements',
+        mood: 'Radiating joy and energy, like a perfect sunny day',
+        elements: 'Sunbeams, floating balloons, blooming flowers, clear skies, celebration'
+      },
+      excited: {
+        style: 'Energetic, sparkling illustration with movement',
+        colors: 'Electric blues, bright pinks, gold accents with sparkle effects',
+        mood: 'Buzzing with anticipation, like fireworks in the sky',
+        elements: 'Shooting stars, sparkles, swirling energy, festive elements, dynamic motion'
+      },
+      worried: {
+        style: 'Soft, protective illustration with gentle comfort',
+        colors: 'Warm earth tones, soft browns, gentle greens with cozy elements',
+        mood: 'Safe and nurturing, like being wrapped in a warm blanket',
+        elements: 'Protective canopies, soft nests, gentle embrace, calm shelters'
+      },
+      neutral: {
+        style: 'Balanced, serene illustration',
+        colors: 'Harmonious pastels, balanced composition with natural elements',
+        mood: 'Peaceful and centered, like a calm lake reflecting the sky',
+        elements: 'Natural landscapes, balanced compositions, gentle scenes'
+      }
+    };
 
-🎨 VISUAL STYLE:
-- Ultra-cute kawaii aesthetic with soft, rounded shapes
-- Pastel color palette: baby pink, sky blue, mint green, cream yellow, lavender
-- Gentle gradient backgrounds with subtle sparkles or light effects
-- Clean, minimalist composition with lots of breathing room
+    const selectedStyle = emotionStyles[emotion] || emotionStyles.neutral;
 
-✨ CHARACTER & ELEMENTS:
-- IF characters needed: cute animals (cats, rabbits, bears) or simple blob creatures
-- Adorable objects: tiny houses, floating clouds, small hearts, flowers, stars
-- Everything should have a soft, plushie-like quality
-- Add small magical details: floating sparkles, gentle glows, tiny rainbows
+    return `Create a meaningful illustration about: "${englishSummary}"
+
+🎨 EMOTIONAL STYLE:
+${selectedStyle.style}
+
+🌈 COLOR PALETTE:
+${selectedStyle.colors}
 
 🌟 MOOD & ATMOSPHERE:
-- Supremely comforting and safe to look at
-- Like a warm hug in visual form
-- Radiates gentle happiness and peace
-- Perfect for a children's book or diary sticker
-- Makes you smile just by looking at it
+${selectedStyle.mood}
 
-🚫 AVOIDS:
-- NO text or letters anywhere
-- NO human faces or realistic people
-- NO overly complex or busy compositions
-- NO sharp edges or harsh contrasts
-- Allow subtle melancholy if story requires, but keep overall tone hopeful
+✨ VISUAL ELEMENTS:
+${selectedStyle.elements}
+- Natural, organic forms and shapes
+- Emotional resonance over pure cuteness
+- Artistic and expressive rather than overly stylized
 
-Think: Studio Ghibli meets Sanrio characters meets gentle watercolor painting. Make it so cute and positive that anyone would want it as wallpaper or a sticker! 🌈💕`;
+📐 COMPOSITION:
+- Clean, focused composition
+- Allow emotions to guide the visual narrative
+- Balance between abstract and recognizable elements
+
+🚫 AVOID:
+- NO text or letters
+- NO overly complex details
+- NO generic stock photo aesthetics
+- Don't force happiness if the emotion doesn't match
+
+Think: Emotional authenticity meets artistic beauty. Create something that feels real and relatable to human experience.`;
   }
 
   // 프롬프트에서 영어 요약 부분 추출 (저장용)
@@ -591,8 +656,9 @@ Think: Studio Ghibli meets Sanrio characters meets gentle watercolor painting. M
     try {
       const concise = sanitizeSummary(summaryText);
       
-      // 한국어 요약을 영어로 번역하여 DALL-E 최적화된 프롬프트 생성
-      const imagePrompt = createOptimizedImagePrompt(concise);
+      // 사용자 메시지 기반 감정 분석하여 이미지 프롬프트 생성
+      const userMessages = msgs.filter(m => m.role === 'user').map(m => m.content);
+      const imagePrompt = createEmotionBasedImagePrompt(concise, userMessages);
       
       // 영어 요약 추출 (사용자에게는 보이지 않지만 일관성을 위해 저장)
       const englishSummary = extractEnglishFromPrompt(imagePrompt);
