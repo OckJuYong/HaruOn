@@ -684,12 +684,12 @@ export default function Chat() {
   }
 
   // 개인화된 메시지 배열 생성
-  function generatePersonalizedMessages(currentMessage) {
+  async function generatePersonalizedMessages(currentMessage) {
     const messages = [...msgs]; // 기존 대화 히스토리
 
     // 시스템 프롬프트 추가 (개인화 또는 기본)
     const systemPrompt = userPersonalization ? 
-      generatePersonalizedSystemPrompt(userPersonalization) : 
+      await generatePersonalizedSystemPrompt(userPersonalization) : 
       getDefaultSystemPrompt();
       
     if (systemPrompt) {
@@ -973,9 +973,8 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
 
       <TopBar title="채팅" />
       
-      {/* 친밀도 상태 표시 */}
-      {intimacyLevel > 0 && (
-        <div style={styles.intimacyBar}>
+      {/* 친밀도 상태 표시 - 항상 표시 */}
+      <div style={styles.intimacyBar}>
           <div style={styles.intimacyBarInfo}>
             <span style={styles.intimacyBarLabel}>친밀도</span>
             <span style={styles.intimacyBarValue}>{intimacyLevel}%</span>
@@ -983,7 +982,7 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
               {intimacyLevel > 70 ? '💖 단짝친구' :
                intimacyLevel > 40 ? '😊 친한 친구' :
                intimacyLevel > 20 ? '🙂 알아가는 사이' :
-               '👋 새로운 친구'}
+               intimacyLevel > 0 ? '👋 새로운 친구' : '👶 만나서 반가워요'}
             </span>
           </div>
           <div style={styles.intimacyBarActions}>
@@ -996,7 +995,7 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
             </button>
           </div>
         </div>
-      )}
+      </div>
       <main style={{ padding: 16, paddingBottom: listPaddingBottom }}>
         {!cid && !creating && (
           <Card>
@@ -1039,9 +1038,10 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
                   flexWrap: 'wrap',
                   alignItems: 'baseline',
                   gap: 6,
-                  maxWidth: '76%',
-                  wordBreak: 'break-word',
-                  lineHeight: 1.35,
+                  maxWidth: '80%',
+                  wordBreak: 'keep-all',
+                  overflowWrap: 'break-word',
+                  lineHeight: 1.4,
                 }}
               >
                 <span style={{ flex: '1 1 auto', minWidth: 0, whiteSpace: 'pre-wrap' }}>
@@ -1071,7 +1071,9 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
                   padding: '6px 8px',
                   borderRadius: 10,
                   fontSize: 14,
-                  maxWidth: '76%',
+                  maxWidth: '80%',
+                  wordBreak: 'keep-all',
+                  overflowWrap: 'break-word'
                 }}
               >
                 생각중...
@@ -1089,10 +1091,11 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
                   padding: '6px 8px',
                   borderRadius: 10,
                   fontSize: 14,
-                  maxWidth: '76%',
+                  maxWidth: '80%',
                   whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  lineHeight: 1.35,
+                  wordBreak: 'keep-all',
+                  overflowWrap: 'break-word',
+                  lineHeight: 1.4,
                 }}
               >
                 {typingText}
