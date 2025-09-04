@@ -995,7 +995,6 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
             </button>
           </div>
         </div>
-      </div>
       <main style={{ padding: 16, paddingBottom: listPaddingBottom }}>
         {!cid && !creating && (
           <Card>
