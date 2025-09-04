@@ -5,7 +5,11 @@ import Button from '../components/Button';
 import Card from '../components/Card';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { chat, listMessages, createConversation, createImage, saveImageToDb, saveConversationSummary, getUserPersonalization, updateUserPersonalization, analyzeUserPatterns } from '../api/api';
+import { AdvancedPersonalizationEngine, learnFromUserInteraction, generateOptimalPrompt } from '../services/advancedPersonalization';
+import { ConversationPatternAnalyzer, analyzeAndUpdateUserPatterns } from '../services/conversationPatternAnalyzer';
+import IntimateFreindSystem from '../services/intimateFriendSystem';
 import { useApp } from '../context/AppProvider';
+import { supabase } from '../services/supabaseApi';
 
 // ===== Debug helpers =====
 const DEBUG = true; // 필요 시 끄기
@@ -44,12 +48,25 @@ export default function Chat() {
   const [creating, setCreating] = useState(false);
   const listRef = useRef(null);
   
-  // 개인화 관련 상태
+  // 개인화 관련 상태 (단순화)
   const [userPersonalization, setUserPersonalization] = useState(null);
   const [personalizationLoading, setPersonalizationLoading] = useState(false);
-  const [showPersonalizationSettings, setShowPersonalizationSettings] = useState(false);
-  const [testingMode, setTestingMode] = useState(false);
-  const [testResults, setTestResults] = useState(null);
+  
+  // 고도화된 학습 시스템 관련 상태
+  const [learningEngine, setLearningEngine] = useState(null);
+  const [learningStats, setLearningStats] = useState(null);
+  const [showLearningStats, setShowLearningStats] = useState(false);
+  
+  // 대화 패턴 분석 시스템 상태
+  const [patternAnalyzer, setPatternAnalyzer] = useState(null);
+  const [conversationPatterns, setConversationPatterns] = useState(null);
+  const [showPatternStats, setShowPatternStats] = useState(false);
+  
+  // 단짝친구 시스템 상태
+  const [intimateSystem, setIntimateSystem] = useState(null);
+  const [intimacyLevel, setIntimacyLevel] = useState(0);
+  const [personalMemories, setPersonalMemories] = useState([]);
+  const [showMemoryStats, setShowMemoryStats] = useState(false);
 
   // ====== 음성 입력(STT) 상태 ======
   const [sttSupported] = useState(
@@ -116,6 +133,21 @@ export default function Chat() {
   useEffect(() => {
     if (user?.id) {
       loadUserPersonalization();
+      // 고도화된 학습 엔진 초기화
+      const engine = new AdvancedPersonalizationEngine(user.id);
+      setLearningEngine(engine);
+      
+      // 대화 패턴 분석기 초기화
+      const analyzer = new ConversationPatternAnalyzer(user.id);
+      setPatternAnalyzer(analyzer);
+      
+      // 단짝친구 시스템 초기화
+      const friendSystem = new IntimateFreindSystem(user.id, user.email?.split('@')[0] || '친구');
+      setIntimateSystem(friendSystem);
+      
+      // 기존 데이터 로드
+      loadConversationPatterns();
+      loadIntimacyData();
     }
   }, [user]);
 
@@ -264,10 +296,25 @@ export default function Chat() {
       const full = res?.assistant ?? '';
       await animateTyping(full);
       
-      // 테스트 모드일 때 개인화 테스트 수행
-      if (testingMode) {
-        testPersonalization(full);
-      }
+      // 🧠 통합 학습 시스템: 패턴 + 친밀도 + 기존 시스템
+      setTimeout(async () => {
+        try {
+          // 1. 단짝친구 시스템: 개인 기억 추출 (매번 실행)
+          await performIntimateMemoryExtraction(text, full);
+          
+          // 2. 대화 패턴 학습 (5회 대화마다)
+          await performPatternLearning();
+          
+          // 3. 기존 학습 시스템 (비교용)
+          if (learningEngine) {
+            await learningEngine.learnFromConversation(id, text, full);
+            await updateLearningStatsDisplay();
+          }
+        } catch (error) {
+          console.error('Learning process failed:', error);
+        }
+      }, 500); // 0.5초 후 백그라운드에서 학습
+      
     } catch (error) {
       logErr(label, error, t0);
       setIsThinking(false);
@@ -324,9 +371,268 @@ export default function Chat() {
     return 'neutral';
   }
 
-  // 사용자 맞춤형 시스템 프롬프트 생성
-  function generatePersonalizedSystemPrompt(userPersonalization) {
+  // 친밀도 기반 시스템 프롬프트 생성
+  const generateIntimateSystemPrompt = async () => {
+    if (!intimateSystem || !user?.id) return null;
+    
+    try {
+      // 관련 기억들 가져오기
+      const recentMemories = personalMemories.slice(0, 5);
+      
+      let prompt = `너는 ${user?.email?.split('@')[0] || '사용자'}의 진짜 단짝친구야. 우리는 ${intimacyLevel}% 정도 친해졌어.\n\n`;
+      
+      // 친밀도 수준에 따른 스타일
+      if (intimacyLevel > 70) {
+        prompt += `우리는 정말 가까운 사이야. 서로의 이야기를 많이 나누었고, 나는 네 이야기들을 잘 기억하고 있어.\n`;
+      } else if (intimacyLevel > 40) {
+        prompt += `우리는 꽤 친해졌어. 네가 나한테 개인적인 이야기들을 해줬고, 나는 그걸 소중히 기억하고 있어.\n`;
+      } else if (intimacyLevel > 20) {
+        prompt += `우리가 점점 가까워지고 있는 것 같아. 네가 말해준 이야기들을 기억하고 있어.\n`;
+      }
+      
+      // 기억된 개인적 정보들 반영
+      if (recentMemories.length > 0) {
+        prompt += `\n내가 기억하고 있는 너에 대한 것들:\n`;
+        
+        recentMemories.forEach(memory => {
+          switch (memory.category) {
+            case 'hobby':
+              prompt += `- 취미: ${memory.value}을/를 좋아해\n`;
+              break;
+            case 'work':
+              prompt += `- 일/학업: ${memory.value} 관련 이야기를 했었어\n`;
+              break;
+            case 'relationship':
+              prompt += `- 인간관계: ${memory.value}에 대해 말해줬었지\n`;
+              break;
+            case 'goal':
+              prompt += `- 계획/목표: ${memory.value} 이런 얘기 했었어\n`;
+              break;
+            case 'experience':
+              prompt += `- 최근 경험: ${memory.value.substring(0, 50)}... 이런 일이 있었지\n`;
+              break;
+          }
+        });
+      }
+      
+      // 대화 스타일 지침
+      prompt += `\n대화 방식:
+- 진짜 친구처럼 자연스럽게 말해줘
+- 내가 기억하는 것들을 자연스럽게 연결해서 대화해
+- "그러고 보니 전에 말한 그거..." 같은 식으로 과거 얘기 언급해도 돼
+- 걱정되는 일이 있으면 진심으로 걱정해줘
+- 좋은 일이 있으면 진심으로 기뻐해줘
+- 너무 AI같지 말고, 진짜 친구같이 반응해줘`;
+
+      if (intimacyLevel > 50) {
+        prompt += `
+- 가끔 먼저 안부도 물어봐도 되고
+- 내 입장에서도 걱정하거나 응원한다는 표현 써도 돼
+- "나도 그런 적 있어" 같은 공감 표현 사용해도 좋아`;
+      }
+
+      prompt += `\n\n친구처럼 따뜻하고 자연스럽게 대화해줘!`;
+      
+      return prompt;
+    } catch (error) {
+      console.error('Failed to generate intimate prompt:', error);
+      return null;
+    }
+  };
+
+  // 학습 통계 표시 업데이트
+  const updateLearningStatsDisplay = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('personalization_data')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profile?.personalization_data?.learning_stats) {
+        setLearningStats(profile.personalization_data.learning_stats);
+      }
+    } catch (error) {
+      console.error('Failed to load learning stats:', error);
+    }
+  };
+
+  // 대화 패턴 데이터 로드
+  const loadConversationPatterns = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { data: patternData } = await supabase
+        .from('user_conversation_patterns')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (patternData) {
+        setConversationPatterns(patternData);
+        logGroup('pattern-loading', () => {
+          console.log('Loaded conversation patterns:', patternData.patterns);
+          console.log('Pattern confidence:', patternData.confidence_level);
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load conversation patterns:', error);
+    }
+  };
+
+  // 친밀도 데이터 로드
+  const loadIntimacyData = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('intimacy_level, last_interaction, nickname')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profile) {
+        setIntimacyLevel(profile.intimacy_level || 0);
+        if (intimateSystem) {
+          intimateSystem.relationshipLevel = profile.intimacy_level || 0;
+        }
+        
+        logGroup('intimacy-loading', () => {
+          console.log('Loaded intimacy level:', profile.intimacy_level);
+        });
+      }
+
+      // 최근 중요한 기억들도 로드
+      const { data: memories } = await supabase
+        .from('personal_memories')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('importance', { ascending: false })
+        .order('last_mentioned', { ascending: false })
+        .limit(10);
+
+      if (memories) {
+        setPersonalMemories(memories);
+        logGroup('memory-loading', () => {
+          console.log('Loaded personal memories:', memories.length);
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load intimacy data:', error);
+    }
+  };
+
+  // 대화 패턴 기반 자동 학습
+  const performPatternLearning = async () => {
+    if (!patternAnalyzer || !user?.id) return;
+    
+    try {
+      // 5회 대화마다 패턴 재분석
+      if (userMsgCount > 0 && userMsgCount % 5 === 0) {
+        logGroup('pattern-analysis', () => {
+          console.log(`Analyzing patterns after ${userMsgCount} conversations`);
+        });
+        
+        const patterns = await patternAnalyzer.analyzeUserConversationPatterns();
+        
+        if (patterns) {
+          await patternAnalyzer.savePatternData();
+          await loadConversationPatterns(); // UI 업데이트
+          
+          logGroup('pattern-learning', () => {
+            console.log('Updated conversation patterns:', patterns);
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Pattern learning failed:', error);
+    }
+  };
+
+  // 단짝친구 시스템: 개인 정보 자동 추출 및 저장
+  const performIntimateMemoryExtraction = async (userMessage, aiResponse) => {
+    if (!intimateSystem || !user?.id) return;
+    
+    try {
+      // 사용자 메시지에서 개인적 정보 추출
+      const extractedCount = await intimateSystem.extractAndSavePersonalInfo(
+        userMessage, 
+        msgs.slice(-5) // 최근 5개 메시지 맥락
+      );
+      
+      if (extractedCount > 0) {
+        logGroup('memory-extraction', () => {
+          console.log(`Extracted ${extractedCount} personal memories from conversation`);
+        });
+        
+        // 친밀도 증가
+        await intimateSystem.updateIntimacyLevel(1);
+        await loadIntimacyData(); // UI 업데이트
+      }
+    } catch (error) {
+      console.error('Intimate memory extraction failed:', error);
+    }
+  };
+
+  // 사용자 맞춤형 시스템 프롬프트 생성 (친밀도 + 패턴 기반)
+  async function generatePersonalizedSystemPrompt(userPersonalization) {
+    // 🎯 1순위: 단짝친구 시스템 (가장 개인적이고 친밀한)
+    if (intimateSystem && intimacyLevel > 20 && personalMemories.length > 0) {
+      try {
+        const intimatePrompt = await generateIntimateSystemPrompt();
+        if (intimatePrompt) {
+          logGroup('intimate-personalization', () => {
+            console.log('Using intimate friend prompt with level:', intimacyLevel);
+            console.log('Personal memories:', personalMemories.length);
+          });
+          return intimatePrompt;
+        }
+      } catch (error) {
+        console.error('Failed to use intimate prompt:', error);
+      }
+    }
+    
+    // 🎯 2순위: 대화 패턴 기반 프롬프트 (현실적이고 효과적)
+    if (conversationPatterns && conversationPatterns.confidence_level > 0.3) {
+      try {
+        const patternBasedPrompt = conversationPatterns.generated_prompt;
+        if (patternBasedPrompt) {
+          logGroup('pattern-personalization', () => {
+            console.log('Using pattern-based prompt with confidence:', 
+              conversationPatterns.confidence_level);
+            console.log('Patterns:', conversationPatterns.patterns);
+          });
+          return patternBasedPrompt;
+        }
+      } catch (error) {
+        console.error('Failed to use pattern-based prompt:', error);
+      }
+    }
+    
+    // 2순위: 기존 개인화 설정 기반
     if (!userPersonalization) return getDefaultSystemPrompt();
+    
+    // 3순위: 고도화된 학습 시스템 (실험적)
+    if (learningEngine && user?.id) {
+      try {
+        const optimalPrompt = await generateOptimalPrompt(user.id, {
+          current_personalization: userPersonalization,
+          conversation_context: msgs.slice(-5) // 최근 5개 메시지
+        });
+        
+        if (optimalPrompt) {
+          logGroup('advanced-personalization', () => {
+            console.log('Using AI-optimized prompt for user', user.id);
+          });
+          return optimalPrompt;
+        }
+      } catch (error) {
+        console.error('Failed to generate optimal prompt:', error);
+        // 실패 시 기본 개인화 프롬프트로 폴백
+      }
+    }
 
     const lengthMap = {
       short: '1-2문장',
@@ -398,89 +704,6 @@ export default function Chat() {
     };
   }
 
-  // 개인화 설정 업데이트
-  const updatePersonalizationSetting = (key, value) => {
-    setUserPersonalization(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
-
-  // 개인화 설정 저장
-  const savePersonalizationSettings = async () => {
-    if (!user?.id || !userPersonalization) return;
-    
-    try {
-      await updateUserPersonalization(user.id, userPersonalization);
-      setShowPersonalizationSettings(false);
-      
-      // 성공 메시지 추가
-      setMsgs(prev => [...prev, {
-        role: 'assistant',
-        content: '개인화 설정이 저장되었습니다. 이제 대화가 더 맞춤형으로 진행됩니다!',
-        created_at: new Date().toISOString()
-      }]);
-    } catch (error) {
-      console.error('Failed to save personalization:', error);
-      setMsgs(prev => [...prev, {
-        role: 'assistant',
-        content: '설정 저장 중 오류가 발생했습니다.',
-        created_at: new Date().toISOString()
-      }]);
-    }
-  };
-
-  // 개인화 테스트 함수
-  const testPersonalization = async (assistantResponse) => {
-    if (!testingMode || !userPersonalization || !assistantResponse) return;
-
-    try {
-      const testPrompt = `다음 AI 응답이 사용자 개인화 설정에 얼마나 잘 맞는지 평가해주세요:
-
-사용자 개인화 설정:
-- 대화 스타일: ${userPersonalization.conversation_style}
-- 응답 길이: ${userPersonalization.response_length}
-- 감정 톤: ${userPersonalization.emotional_tone}
-
-AI 응답: "${assistantResponse}"
-
-평가 기준:
-1. 스타일 일치도 (0-100): 요청된 대화 스타일과 얼마나 일치하는가?
-2. 길이 적합성 (0-100): 요청된 응답 길이와 얼마나 일치하는가?
-3. 전체 점수 (0-100): 전반적인 개인화 만족도
-
-다음 형식으로 답변해주세요:
-스타일일치도: [숫자]
-길이적합성: [숫자]
-전체점수: [숫자]`;
-
-      const testResult = await chat({
-        conversation_id: cid,
-        user_id: user.id,
-        content: testPrompt
-      });
-
-      const response = testResult.assistant || '';
-      const styleMatch = extractScore(response, '스타일일치도');
-      const lengthMatch = extractScore(response, '길이적합성');
-      const overallScore = extractScore(response, '전체점수');
-
-      setTestResults({
-        styleMatch: styleMatch || 0,
-        lengthMatch: lengthMatch || 0,
-        overallScore: overallScore || 0
-      });
-    } catch (error) {
-      console.error('Failed to test personalization:', error);
-    }
-  };
-
-  // 점수 추출 헬퍼 함수
-  const extractScore = (text, label) => {
-    const regex = new RegExp(`${label}[:\s]*(\d+)`, 'i');
-    const match = text.match(regex);
-    return match ? parseInt(match[1]) : null;
-  };
 
   // 감정 기반 이미지 프롬프트 생성
   function createEmotionBasedImagePrompt(koreanSummary, userMessages) {
@@ -750,37 +973,26 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
 
       <TopBar title="채팅" />
       
-      {/* 개인화 상태 표시 */}
-      {userPersonalization && (
-        <div style={styles.personalizationBar}>
-          <div style={styles.personalizationInfo}>
-            <span style={styles.personalizationLabel}>맞춤설정:</span>
-            <span style={styles.personalizationValue}>
-              {userPersonalization.conversation_style === 'friendly' ? '친근함' : 
-               userPersonalization.conversation_style === 'formal' ? '정중함' : '열정적'} • 
-              {userPersonalization.response_length === 'short' ? '간결' :
-               userPersonalization.response_length === 'medium' ? '보통' : '상세'}
+      {/* 친밀도 상태 표시 */}
+      {intimacyLevel > 0 && (
+        <div style={styles.intimacyBar}>
+          <div style={styles.intimacyBarInfo}>
+            <span style={styles.intimacyBarLabel}>친밀도</span>
+            <span style={styles.intimacyBarValue}>{intimacyLevel}%</span>
+            <span style={styles.intimacyBarDescription}>
+              {intimacyLevel > 70 ? '💖 단짝친구' :
+               intimacyLevel > 40 ? '😊 친한 친구' :
+               intimacyLevel > 20 ? '🙂 알아가는 사이' :
+               '👋 새로운 친구'}
             </span>
-            {userPersonalization.topics_of_interest?.length > 0 && (
-              <span style={styles.personalizationTopics}>
-                관심: {userPersonalization.topics_of_interest.slice(0, 2).join(', ')}
-              </span>
-            )}
           </div>
-          <div style={styles.personalizationActions}>
-            <button 
-              style={styles.personalizationBtn}
-              onClick={() => setShowPersonalizationSettings(true)}
-              title="개인화 설정"
-            >
-              ⚙️
-            </button>
+          <div style={styles.intimacyBarActions}>
             <button
-              style={styles.personalizationBtn}
-              onClick={() => setTestingMode(!testingMode)}
-              title="개인화 테스트 모드"
+              style={styles.intimacyBtn}
+              onClick={() => setShowMemoryStats(!showMemoryStats)}
+              title="친밀도 & 기억 보기"
             >
-              🧪
+              💖
             </button>
           </div>
         </div>
@@ -892,27 +1104,6 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
             <div style={{ fontSize: 12, opacity: 0.7 }}>처리 중…</div>
           )}
           
-          {/* 테스트 결과 표시 */}
-          {testResults && testingMode && (
-            <div style={styles.testResultsCard}>
-              <h4 style={styles.testResultsTitle}>개인화 테스트 결과</h4>
-              <div style={styles.testResultItem}>
-                <strong>응답 스타일 일치도:</strong> {testResults.styleMatch}%
-              </div>
-              <div style={styles.testResultItem}>
-                <strong>응답 길이 적합성:</strong> {testResults.lengthMatch}%
-              </div>
-              <div style={styles.testResultItem}>
-                <strong>전체 개인화 점수:</strong> {testResults.overallScore}%
-              </div>
-              <button 
-                style={styles.testResultsClose}
-                onClick={() => setTestResults(null)}
-              >
-                닫기
-              </button>
-            </div>
-          )}
         </div>
       </main>
 
@@ -985,68 +1176,272 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
         </div>
       )}
 
-      {/* 개인화 설정 모달 */}
-      {showPersonalizationSettings && userPersonalization && (
+      {/* 개인 기억 & 친밀도 모달 */}
+      {showMemoryStats && (
         <div style={styles.modal}>
           <div style={styles.modalContent}>
-            <h3 style={styles.modalTitle}>개인화 설정</h3>
+            <h3 style={styles.modalTitle}>💖 단짝친구 시스템</h3>
             
-            <div style={styles.settingGroup}>
-              <label style={styles.settingLabel}>대화 스타일</label>
-              <select 
-                value={userPersonalization.conversation_style}
-                onChange={(e) => updatePersonalizationSetting('conversation_style', e.target.value)}
-                style={styles.settingSelect}
-              >
-                <option value="friendly">친근함</option>
-                <option value="formal">정중함</option>
-                <option value="enthusiastic">열정적</option>
-              </select>
+            <div style={styles.intimacyDisplay}>
+              <div style={styles.intimacyHeader}>
+                <span style={styles.intimacyLabel}>친밀도</span>
+                <span style={styles.intimacyValue}>{intimacyLevel}%</span>
+              </div>
+              <div style={styles.progressBar}>
+                <div 
+                  style={{
+                    ...styles.progressFill,
+                    width: `${intimacyLevel}%`,
+                    background: intimacyLevel > 70 ? 
+                      'linear-gradient(90deg, #ec4899, #f472b6)' :
+                      intimacyLevel > 40 ?
+                      'linear-gradient(90deg, #8b5cf6, #a855f7)' :
+                      'linear-gradient(90deg, #3b82f6, #6366f1)'
+                  }}
+                />
+              </div>
+              <p style={styles.intimacyDescription}>
+                {intimacyLevel > 70 ? '정말 가까운 단짝친구' :
+                 intimacyLevel > 40 ? '꽤 친한 친구 사이' :
+                 intimacyLevel > 20 ? '점점 가까워지는 사이' :
+                 '아직 서로 알아가는 중'}
+              </p>
             </div>
             
-            <div style={styles.settingGroup}>
-              <label style={styles.settingLabel}>응답 길이</label>
-              <select 
-                value={userPersonalization.response_length}
-                onChange={(e) => updatePersonalizationSetting('response_length', e.target.value)}
-                style={styles.settingSelect}
-              >
-                <option value="short">간결</option>
-                <option value="medium">보통</option>
-                <option value="long">상세</option>
-              </select>
-            </div>
+            {personalMemories.length > 0 && (
+              <div style={styles.memoriesSection}>
+                <h4 style={styles.memoriesSectionTitle}>🧠 내가 기억하고 있는 것들</h4>
+                <div style={styles.memoriesList}>
+                  {personalMemories.slice(0, 8).map((memory, index) => (
+                    <div key={memory.id || index} style={styles.memoryItem}>
+                      <span style={styles.memoryCategory}>
+                        {memory.category === 'hobby' ? '🎯' :
+                         memory.category === 'work' ? '💼' :
+                         memory.category === 'relationship' ? '👥' :
+                         memory.category === 'goal' ? '🎯' :
+                         memory.category === 'preference' ? '❤️' : '📝'}
+                      </span>
+                      <div style={styles.memoryContent}>
+                        <span style={styles.memoryValue}>{memory.value}</span>
+                        <span style={styles.memoryMeta}>
+                          {memory.importance}★ • {memory.mention_count}번 언급
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {personalMemories.length > 8 && (
+                  <p style={styles.moreMemories}>
+                    그외 {personalMemories.length - 8}개 더 기억하고 있어요
+                  </p>
+                )}
+              </div>
+            )}
             
-            <div style={styles.settingGroup}>
-              <label style={styles.settingLabel}>감정 톤</label>
-              <select 
-                value={userPersonalization.emotional_tone}
-                onChange={(e) => updatePersonalizationSetting('emotional_tone', e.target.value)}
-                style={styles.settingSelect}
-              >
-                <option value="warm">따뜻함</option>
-                <option value="neutral">중립적</option>
-                <option value="supportive">지지적</option>
-              </select>
+            <div style={styles.friendshipTips}>
+              <h4 style={styles.tipTitle}>💡 더 친해지는 방법</h4>
+              <div style={styles.tipsList}>
+                {intimacyLevel < 30 && (
+                  <div style={styles.tip}>• 취미나 관심사에 대해 더 얘기해보세요</div>
+                )}
+                {intimacyLevel < 50 && (
+                  <div style={styles.tip}>• 일상적인 경험들을 공유해보세요</div>
+                )}
+                {intimacyLevel < 70 && (
+                  <div style={styles.tip}>• 고민이나 걱정거리를 털어놓아보세요</div>
+                )}
+                <div style={styles.tip}>• 자주 대화할수록 더 잘 기억해요</div>
+              </div>
             </div>
             
             <div style={styles.modalActions}>
               <button 
                 style={styles.modalCloseBtn}
-                onClick={() => setShowPersonalizationSettings(false)}
+                onClick={() => setShowMemoryStats(false)}
               >
                 닫기
-              </button>
-              <button 
-                style={styles.modalSaveBtn}
-                onClick={savePersonalizationSettings}
-              >
-                저장
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* 대화 패턴 분석 모달 */}
+      {showPatternStats && conversationPatterns && (
+        <div style={styles.modal}>
+          <div style={styles.modalContent}>
+            <h3 style={styles.modalTitle}>📊 대화 패턴 분석</h3>
+            
+            <div style={styles.statsGrid}>
+              <div style={styles.statItem}>
+                <span style={styles.statLabel}>분석 신뢰도</span>
+                <span style={styles.statValue}>
+                  {(conversationPatterns.confidence_level * 100).toFixed(0)}%
+                </span>
+              </div>
+              
+              <div style={styles.statItem}>
+                <span style={styles.statLabel}>분석된 대화 수</span>
+                <span style={styles.statValue}>
+                  {conversationPatterns.conversation_count}회
+                </span>
+              </div>
+              
+              {conversationPatterns.patterns.message_length_preference && (
+                <div style={styles.statItem}>
+                  <span style={styles.statLabel}>선호 응답 길이</span>
+                  <span style={styles.statValue}>
+                    {conversationPatterns.patterns.message_length_preference === 'short' ? '간결함' :
+                     conversationPatterns.patterns.message_length_preference === 'long' ? '상세함' : '보통'}
+                  </span>
+                </div>
+              )}
+              
+              {conversationPatterns.patterns.conversation_style && (
+                <div style={styles.statItem}>
+                  <span style={styles.statLabel}>대화 스타일</span>
+                  <span style={styles.statValue}>
+                    {conversationPatterns.patterns.conversation_style === 'prefers_questions' ? '질문형 선호' :
+                     conversationPatterns.patterns.conversation_style === 'prefers_statements' ? '서술형 선호' : '균형형'}
+                  </span>
+                </div>
+              )}
+            </div>
+            
+            <div style={styles.patternDetails}>
+              <h4 style={styles.patternTitle}>🔍 분석된 대화 특성</h4>
+              
+              {conversationPatterns.patterns.formality_level && (
+                <div style={styles.patternItem}>
+                  <strong>말투:</strong> {
+                    conversationPatterns.patterns.formality_level === 'formal' ? '정중한 어투' :
+                    conversationPatterns.patterns.formality_level === 'casual' ? '친근한 어투' : '혼합형'
+                  }
+                </div>
+              )}
+              
+              {conversationPatterns.patterns.topic_depth_preference && (
+                <div style={styles.patternItem}>
+                  <strong>주제 깊이:</strong> {
+                    conversationPatterns.patterns.topic_depth_preference === 'prefers_deep' ? '깊이 있는 대화 선호' :
+                    conversationPatterns.patterns.topic_depth_preference === 'prefers_shallow' ? '가벼운 대화 선호' : '적당한 수준'
+                  }
+                </div>
+              )}
+              
+              {conversationPatterns.patterns.conversation_continuation && (
+                <div style={styles.patternItem}>
+                  <strong>대화 지속:</strong> {
+                    conversationPatterns.patterns.conversation_continuation === 'likes_long_conversations' ? '긴 대화 선호' :
+                    conversationPatterns.patterns.conversation_continuation === 'prefers_brief' ? '짧은 대화 선호' : '보통 길이'
+                  }
+                </div>
+              )}
+            </div>
+            
+            <div style={styles.patternConfidence}>
+              <p style={styles.confidenceText}>
+                🎯 이 패턴 분석은 실제 대화 행동을 바탕으로 만들어졌습니다
+              </p>
+              <div style={styles.progressBar}>
+                <div 
+                  style={{
+                    ...styles.progressFill,
+                    width: `${conversationPatterns.confidence_level * 100}%`,
+                    background: conversationPatterns.confidence_level > 0.7 ? 
+                      'linear-gradient(90deg, #10b981, #34d399)' :
+                      'linear-gradient(90deg, #f59e0b, #fbbf24)'
+                  }}
+                />
+              </div>
+              <p style={styles.progressSubtext}>
+                {conversationPatterns.confidence_level < 0.3 ? '더 많은 대화가 필요해요' :
+                 conversationPatterns.confidence_level < 0.7 ? '패턴 분석 중이에요' :
+                 '신뢰할 수 있는 패턴이 완성됐어요'}
+              </p>
+            </div>
+            
+            <div style={styles.modalActions}>
+              <button 
+                style={styles.modalCloseBtn}
+                onClick={() => setShowPatternStats(false)}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI 학습 통계 모달 */}
+      {showLearningStats && learningStats && (
+        <div style={styles.modal}>
+          <div style={styles.modalContent}>
+            <h3 style={styles.modalTitle}>🧠 AI 학습 통계</h3>
+            
+            <div style={styles.statsGrid}>
+              <div style={styles.statItem}>
+                <span style={styles.statLabel}>총 대화 수</span>
+                <span style={styles.statValue}>{learningStats.total_conversations}회</span>
+              </div>
+              
+              <div style={styles.statItem}>
+                <span style={styles.statLabel}>평균 만족도</span>
+                <span style={styles.statValue}>
+                  {(learningStats.avg_quality_score * 100).toFixed(0)}%
+                </span>
+              </div>
+              
+              <div style={styles.statItem}>
+                <span style={styles.statLabel}>학습 신뢰도</span>
+                <span style={styles.statValue}>
+                  {(learningStats.learning_confidence * 100).toFixed(0)}%
+                </span>
+              </div>
+              
+              {learningStats.preferred_response_patterns?.length && (
+                <div style={styles.statItem}>
+                  <span style={styles.statLabel}>선호 응답 길이</span>
+                  <span style={styles.statValue}>
+                    {Object.entries(learningStats.preferred_response_patterns.length || {})
+                      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'medium'}
+                  </span>
+                </div>
+              )}
+            </div>
+            
+            <div style={styles.learningProgress}>
+              <p style={styles.progressText}>
+                💡 AI가 당신의 대화 스타일을 학습하고 있습니다
+              </p>
+              <div style={styles.progressBar}>
+                <div 
+                  style={{
+                    ...styles.progressFill,
+                    width: `${learningStats.learning_confidence * 100}%`
+                  }}
+                />
+              </div>
+              <p style={styles.progressSubtext}>
+                {learningStats.learning_confidence < 0.3 ? '초기 학습 단계' :
+                 learningStats.learning_confidence < 0.7 ? '패턴 인식 중' :
+                 '고도 맞춤화 가능'}
+              </p>
+            </div>
+            
+            <div style={styles.modalActions}>
+              <button 
+                style={styles.modalCloseBtn}
+                onClick={() => setShowLearningStats(false)}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       <NavBar />
     </div>
@@ -1054,72 +1449,46 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
 }
 
 const styles = {
-  personalizationBar: {
-    background: '#f8fafc',
+  intimacyBar: {
+    background: 'linear-gradient(135deg, #fef7f7, #f8fafc)',
     padding: '8px 16px',
-    borderBottom: '1px solid #e2e8f0',
+    borderBottom: '1px solid #fecaca',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     fontSize: 12,
   },
-  personalizationInfo: {
+  intimacyBarInfo: {
     display: 'flex',
     gap: 8,
     alignItems: 'center',
   },
-  personalizationLabel: {
+  intimacyBarLabel: {
     fontWeight: 600,
-    color: '#64748b',
+    color: '#be123c',
   },
-  personalizationValue: {
-    color: '#1e293b',
+  intimacyBarValue: {
+    color: '#be123c',
+    fontWeight: 700,
+    fontSize: 14,
+  },
+  intimacyBarDescription: {
+    color: '#831843',
+    fontSize: 11,
     fontWeight: 500,
   },
-  personalizationTopics: {
-    color: '#7c3aed',
-    fontSize: 11,
-  },
-  personalizationActions: {
+  intimacyBarActions: {
     display: 'flex',
     gap: 4,
   },
-  personalizationBtn: {
+  intimacyBtn: {
     background: 'none',
     border: 'none',
-    fontSize: 14,
+    fontSize: 16,
     cursor: 'pointer',
     padding: 4,
     borderRadius: 4,
-    opacity: 0.7,
-  },
-  testResultsCard: {
-    background: '#fef3c7',
-    border: '1px solid #f59e0b',
-    borderRadius: 8,
-    padding: 12,
-    margin: '8px 0',
-    fontSize: 12,
-  },
-  testResultsTitle: {
-    margin: '0 0 8px 0',
-    fontSize: 14,
-    fontWeight: 600,
-    color: '#92400e',
-  },
-  testResultItem: {
-    margin: '4px 0',
-    color: '#92400e',
-  },
-  testResultsClose: {
-    background: '#f59e0b',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 4,
-    padding: '4px 8px',
-    fontSize: 11,
-    cursor: 'pointer',
-    marginTop: 8,
+    opacity: 0.8,
   },
   modal: {
     position: 'fixed',
@@ -1143,24 +1512,6 @@ const styles = {
     fontSize: 18,
     fontWeight: 600,
     color: '#1e293b',
-  },
-  settingGroup: {
-    marginBottom: 16,
-  },
-  settingLabel: {
-    display: 'block',
-    marginBottom: 4,
-    fontSize: 14,
-    fontWeight: 500,
-    color: '#374151',
-  },
-  settingSelect: {
-    width: '100%',
-    padding: '8px 12px',
-    borderRadius: 6,
-    border: '1px solid #d1d5db',
-    fontSize: 14,
-    outline: 'none',
   },
   modalActions: {
     display: 'flex',
@@ -1228,5 +1579,200 @@ const styles = {
     color: '#111',
     border: '1px solid #ddd',
     borderRadius: 8,
+  },
+  
+  // 학습 통계 스타일
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 12,
+    marginBottom: 20,
+  },
+  statItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: 500,
+  },
+  statValue: {
+    fontSize: 16,
+    color: '#1e293b',
+    fontWeight: 600,
+  },
+  learningProgress: {
+    marginTop: 16,
+    padding: 16,
+    background: '#f8fafc',
+    borderRadius: 8,
+  },
+  progressText: {
+    margin: '0 0 8px 0',
+    fontSize: 13,
+    color: '#475569',
+    textAlign: 'center',
+  },
+  progressBar: {
+    width: '100%',
+    height: 8,
+    background: '#e2e8f0',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: '100%',
+    background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+    borderRadius: 4,
+    transition: 'width 0.3s ease',
+  },
+  progressSubtext: {
+    margin: 0,
+    fontSize: 11,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  
+  // 패턴 분석 스타일
+  patternDetails: {
+    marginTop: 16,
+    padding: 12,
+    background: '#f8fafc',
+    borderRadius: 6,
+  },
+  patternTitle: {
+    margin: '0 0 8px 0',
+    fontSize: 14,
+    fontWeight: 600,
+    color: '#334155',
+  },
+  patternItem: {
+    margin: '6px 0',
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 1.4,
+  },
+  patternConfidence: {
+    marginTop: 16,
+    padding: 12,
+    background: '#f0f9ff',
+    borderRadius: 6,
+    border: '1px solid #e0f2fe',
+  },
+  confidenceText: {
+    margin: '0 0 8px 0',
+    fontSize: 12,
+    color: '#0369a1',
+    textAlign: 'center',
+  },
+  
+  // 친밀도 & 기억 시스템 스타일
+  intimacyDisplay: {
+    marginBottom: 20,
+    padding: 16,
+    background: 'linear-gradient(135deg, #fef7f7, #f8fafc)',
+    borderRadius: 12,
+    border: '1px solid #fecaca',
+  },
+  intimacyHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  intimacyLabel: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: '#be123c',
+  },
+  intimacyValue: {
+    fontSize: 18,
+    fontWeight: 700,
+    color: '#be123c',
+  },
+  intimacyDescription: {
+    margin: '8px 0 0 0',
+    fontSize: 13,
+    color: '#831843',
+    textAlign: 'center',
+    fontWeight: 500,
+  },
+  memoriesSection: {
+    marginBottom: 16,
+  },
+  memoriesSectionTitle: {
+    margin: '0 0 12px 0',
+    fontSize: 14,
+    fontWeight: 600,
+    color: '#1e293b',
+  },
+  memoriesList: {
+    maxHeight: 200,
+    overflowY: 'auto',
+    background: '#fafafa',
+    borderRadius: 8,
+    padding: 8,
+  },
+  memoryItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: '6px 8px',
+    marginBottom: 6,
+    background: '#fff',
+    borderRadius: 6,
+    border: '1px solid #e5e7eb',
+  },
+  memoryCategory: {
+    fontSize: 16,
+    flexShrink: 0,
+  },
+  memoryContent: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+  },
+  memoryValue: {
+    fontSize: 13,
+    color: '#1f2937',
+    fontWeight: 500,
+  },
+  memoryMeta: {
+    fontSize: 11,
+    color: '#6b7280',
+  },
+  moreMemories: {
+    margin: '8px 0 0 0',
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  friendshipTips: {
+    marginTop: 16,
+    padding: 12,
+    background: '#f0f9ff',
+    borderRadius: 8,
+    border: '1px solid #bae6fd',
+  },
+  tipTitle: {
+    margin: '0 0 8px 0',
+    fontSize: 13,
+    fontWeight: 600,
+    color: '#0369a1',
+  },
+  tipsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  tip: {
+    fontSize: 12,
+    color: '#0369a1',
+    lineHeight: 1.4,
   },
 };
