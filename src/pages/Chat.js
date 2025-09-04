@@ -245,7 +245,7 @@ export default function Chat() {
 
       // 개인화된 메시지 생성 (임시로 간단한 형태 사용)
       const simpleMessages = {
-        items: [...msgs]
+        items: [...msgs, userMsg]
       };
       
       const payload = { 
@@ -732,11 +732,14 @@ Think: Studio Ghibli meets Sanrio characters meets gentle watercolor painting. M
           ref={listRef}
           style={{
             marginTop: 8,
-            height: '52vh',
+            maxHeight: '60vh',
+            minHeight: '200px',
             overflowY: 'auto',
+            overflowX: 'hidden',
             paddingRight: 4,
             display: 'grid',
-            gap: 6
+            gap: 6,
+            scrollBehavior: 'smooth'
           }}
         >
           {msgs.map((m, i) => (
