@@ -245,13 +245,9 @@ export class AdvancedPersonalizationEngine {
       };
     }
 
-    // 암시적 피드백 분석
-    const nextUserMessage = await this.getNextUserMessage(assistantResponse);
-    if (!nextUserMessage) {
-      return { type: 'neutral', score: 0.5, source: 'implicit' };
-    }
-
-    return this.analyzeImplicitFeedback(nextUserMessage);
+    // 암시적 피드백 분석 (임시로 중립 반환)
+    // TODO: 실제 구현 필요
+    return { type: 'neutral', score: 0.5, source: 'implicit' };
   }
 
   /**
