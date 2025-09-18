@@ -4,7 +4,7 @@ import TopBar from '../components/TopBar';
 import NavBar from '../components/NavBar';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import { healthz, createConversation, listConversations, getConversationSummary } from '../api/api';
+import { createConversation, listConversations, getConversationSummary } from '../api/api';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppProvider';
 
@@ -32,14 +32,11 @@ const fmtPeriod = (created, updated, fallbackTs) => {
 export default function Home() {
   const navigate = useNavigate();
   const { user } = useApp();
-  const [ok, setOk] = useState('checking...');
   const [title, setTitle] = useState('');
   const [recentConversations, setRecentConversations] = useState([]);
   const [summariesMap, setSummariesMap] = useState({});
 
   useEffect(() => {
-    healthz().then(() => setOk('온라인')).catch(() => setOk('오프라인'));
-    
     // Load recent conversations from Supabase
     if (user?.id) {
       loadRecentConversations();
@@ -88,12 +85,28 @@ export default function Home() {
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
             <div>
-              <div style={{ fontSize: 14, opacity: 0.7 }}>백엔드 상태</div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>{ok}</div>
+              <div style={{ fontSize: 14, opacity: 0.7 }}>사용자 피드백</div>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>의견을 들려주세요</div>
             </div>
-            <div style={{ fontSize: 13, opacity: 0.7 }}>
-              Supabase 연동
-            </div>
+            <a
+              href="https://forms.gle/WNfa3jhCcyTQP5yv7"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#4285f4',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 500,
+                transition: 'background-color 0.2s'
+              }}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#3367d6'}
+              onMouseOut={(e) => e.target.style.backgroundColor = '#4285f4'}
+            >
+              설문 작성
+            </a>
           </div>
         </Card>
 

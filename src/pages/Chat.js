@@ -340,12 +340,30 @@ export default function Chat() {
     setTypingText('');
   }
 
-  // 요약 텍스트를 크레딧 절약을 위해 짧게 제한
+  // 요약 텍스트를 완전한 문장 단위로 스마트하게 제한
   function sanitizeSummary(s) {
     if (!s) return '';
     const oneLine = s.replace(/\s+/g, ' ').trim();
-    const MAX = 120; // 240자 → 120자로 절반 단축 (크레딧 절약)
-    return oneLine.length > MAX ? oneLine.slice(0, MAX) + '…' : oneLine;
+    const MAX = 200; // 120자 → 200자로 늘림
+    
+    if (oneLine.length <= MAX) return oneLine;
+    
+    // 마지막 완전한 문장까지 포함하도록 스마트 자르기
+    const sentences = oneLine.split(/([.!?])/);
+    let result = '';
+    
+    for (let i = 0; i < sentences.length; i += 2) {
+      const sentence = sentences[i];
+      const punctuation = sentences[i + 1] || '';
+      const combined = sentence + punctuation;
+      
+      if ((result + combined).length > MAX && result.length > 0) {
+        break;
+      }
+      result += combined;
+    }
+    
+    return result || oneLine.substring(0, MAX);
   }
 
   // 사용자 감정 분석 함수
@@ -834,19 +852,21 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
     // 사용자 메시지만 추출하여 요약
     const userMessages = msgs.filter(m => m.role === 'user').map(m => m.content).join(' ');
     
-    const summaryPrompt = `다음 사용자의 이야기를 3-4줄로 따뜻하고 긍정적으로 요약해주세요.
-사용자의 대화 내용: "${userMessages}"
+    const summaryPrompt = `내가 오늘 나눈 대화를 나의 관점에서 3-4줄로 요약해줘.
+
+내 대화 내용: "${userMessages}"
 
 요약 규칙:
-1. 사용자가 한 이야기, 경험, 감정을 중심으로 작성
-2. 부정적인 표현은 '어려움을 느꼈다', '고민이 있었다' 정도로 완화 (완전히 제거하지는 않음)
-3. 긍정적 측면이나 성장 가능성을 강조
-4. 사용자가 나중에 보면 '아, 이런 날이었구나' 하며 따뜻하게 느낄 수 있게
-5. 간결하고 일기체로 작성
+1. "나는 ~했다", "내가 ~에 대해 이야기했다" 형식으로 1인칭 관점에서 작성
+2. 나의 경험, 감정, 생각, 고민을 중심으로 서술
+3. 일기체처럼 자연스럽고 솔직하게
+4. 완전한 문장으로 마무리 (중간에 끊기지 않게)
+5. 200자 이내에서 완성된 내용으로
+6. 부정적 감정도 있는 그대로 표현 (과도한 긍정화 금지)
 
-예시: "오늘은 새로운 도전에 대해 이야기하며 고민도 나눠보았다. 비록 어려움이 있었지만, 하나씩 해결해나가는 과정에서 성장하는 느낌을 받았다."
+예시: "나는 새로운 프로젝트에 대한 걱정과 기대감을 털어놨다. 실패할까봐 불안하기도 했지만, 도전해보고 싶다는 마음도 컸다. 친구와 이야기하면서 내 마음을 정리할 수 있었다."
 
-사용자의 이야기를 바탕으로 따뜻한 일기 요약:`;
+나의 하루 일기 요약:`;
 
     let summaryText = '';
     setLoading(true);
