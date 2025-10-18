@@ -6,6 +6,7 @@ import { useApp } from './context/AppProvider';
 import Intro from './pages/Intro';
 import Home from './pages/Home';
 import History from './pages/History';
+import Calendar from './pages/Calendar';
 import Chat from './pages/Chat';
 import Profile from './pages/Profile';
 import Login from "./User/Login/Login";
@@ -58,6 +59,7 @@ export default function App() {
         {/* Protected Routes */}
         <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
+        <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 

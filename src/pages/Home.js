@@ -7,6 +7,7 @@ import Button from '../components/Button';
 import { createConversation, listConversations, getConversationSummary } from '../api/api';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppProvider';
+import { supabase } from '../services/supabaseApi';
 
 // ===== UI helpers =====
 const fmtDate = (isoOrTs) => {
@@ -35,13 +36,58 @@ export default function Home() {
   const [title, setTitle] = useState('');
   const [recentConversations, setRecentConversations] = useState([]);
   const [summariesMap, setSummariesMap] = useState({});
+  const [todayQuest, setTodayQuest] = useState(null);
+  const [questLoading, setQuestLoading] = useState(false);
 
   useEffect(() => {
-    // Load recent conversations from Supabase
+    // Load recent conversations and today's quest from Supabase
     if (user?.id) {
       loadRecentConversations();
+      loadTodayQuest();
     }
   }, [user]);
+
+  const loadTodayQuest = useCallback(async () => {
+    if (!user?.id) return;
+    setQuestLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('get_today_quest_for_user', {
+        target_user_id: user.id,
+      });
+
+      if (error) {
+        console.error('RPC Error:', error);
+        // 함수가 없는 경우 대체 방법: 직접 테이블에서 랜덤 질문 가져오기
+        const { data: templates, error: templateError } = await supabase
+          .from('daily_quest_templates')
+          .select('*')
+          .limit(1);
+
+        if (templateError) {
+          console.error('Template Error:', templateError);
+          throw templateError;
+        }
+
+        if (templates && templates.length > 0) {
+          setTodayQuest({
+            quest_id: templates[0].id,
+            question: templates[0].question_text,
+            category: templates[0].category,
+            already_completed: false
+          });
+        }
+        return;
+      }
+
+      if (data && data.length > 0) {
+        setTodayQuest(data[0]);
+      }
+    } catch (error) {
+      console.error('Failed to load today quest:', error);
+    } finally {
+      setQuestLoading(false);
+    }
+  }, [user?.id]);
 
   const loadRecentConversations = useCallback(async () => {
     if (!user?.id) return;
@@ -78,10 +124,62 @@ export default function Home() {
     navigate(`/chat?cid=${encodeURIComponent(conv.id)}&t=${encodeURIComponent(conv.title)}`);
   }, [title, navigate, user?.id]);
 
+  const handleQuestClick = async () => {
+    if (!todayQuest || todayQuest.already_completed) return;
+
+    // 퀘스트 주제로 새 대화방 생성 (AI가 먼저 질문을 던지도록)
+    const conv = await createConversation({
+      user_id: user?.id,
+      title: `오늘의 질문`
+    });
+
+    // AI가 먼저 질문을 하도록 초기 메시지 설정과 함께 이동
+    navigate(`/chat?cid=${encodeURIComponent(conv.id)}&t=${encodeURIComponent(conv.title)}&quest=${encodeURIComponent(todayQuest.question)}`);
+  };
+
   return (
     <div style={{ paddingBottom: 64 }}>
       <TopBar title="하루온 — 홈" />
       <main style={{ padding: 16, display: 'grid', gap: 16 }}>
+        {/* 오늘의 퀘스트 카드 */}
+        <Card style={{
+          background: todayQuest?.already_completed ? '#f3f4f6' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: '#fff',
+          cursor: todayQuest?.already_completed ? 'default' : 'pointer'
+        }}
+        onClick={handleQuestClick}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 14, opacity: 0.9 }}>📝 오늘의 질문</div>
+              {todayQuest?.already_completed && (
+                <div style={{
+                  padding: '4px 12px',
+                  background: 'rgba(255,255,255,0.3)',
+                  borderRadius: 12,
+                  fontSize: 12
+                }}>
+                  완료됨 ✓
+                </div>
+              )}
+            </div>
+            {questLoading ? (
+              <div>로딩 중...</div>
+            ) : todayQuest ? (
+              <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.4 }}>
+                {todayQuest.question}
+              </div>
+            ) : (
+              <div style={{ fontSize: 16 }}>오늘의 질문을 불러오는 중...</div>
+            )}
+            {!todayQuest?.already_completed && (
+              <div style={{ fontSize: 13, opacity: 0.9 }}>
+                탭하여 대화 시작하기 →
+              </div>
+            )}
+          </div>
+        </Card>
+
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
             <div>

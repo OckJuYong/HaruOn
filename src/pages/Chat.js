@@ -981,29 +981,47 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
   async function summarizeAndDraw() {
     const id = await ensureConversation();
 
-    // 사용자 메시지만 추출하여 요약
-    const userMessages = msgs.filter(m => m.role === 'user').map(m => m.content).join(' ');
-    
-    const summaryPrompt = `내가 오늘 나눈 대화를 나의 관점에서 3-4줄로 요약해줘.
+    // 🎯 사용자 메시지만 추출 (AI 응답 제외)
+    const userOnlyMessages = msgs.filter(m => m.role === 'user').map(m => m.content).join(' ');
 
-내 대화 내용: "${userMessages}"
+    // 🎯 개선: 단일 API 호출로 100자/30자 2가지 요약 동시 생성
+    const summaryPrompt = `사용자의 발언만을 분석하여 2가지 요약을 생성해줘.
 
-요약 규칙:
-1. "나는 ~했다", "내가 ~에 대해 이야기했다" 형식으로 1인칭 관점에서 작성
-2. 나의 경험, 감정, 생각, 고민을 중심으로 서술
-3. 일기체처럼 자연스럽고 솔직하게
-4. 완전한 문장으로 마무리 (중간에 끊기지 않게)
-5. 200자 이내에서 완성된 내용으로
-6. 부정적 감정도 있는 그대로 표현 (과도한 긍정화 금지)
+사용자 발언: "${userOnlyMessages}"
 
-예시: "나는 새로운 프로젝트에 대한 걱정과 기대감을 털어놨다. 실패할까봐 불안하기도 했지만, 도전해보고 싶다는 마음도 컸다. 친구와 이야기하면서 내 마음을 정리할 수 있었다."
+응답 형식 (반드시 JSON만 출력):
+{
+  "detailed": "100자 이내 자세한 요약",
+  "compact": "30자 이내 핵심 요약"
+}
 
-나의 하루 일기 요약:`;
+detailed 규칙 (사용자 표시용 그림일기):
+- "나는 ~했다", "내가 ~에 대해 이야기했다" 형식으로 1인칭 관점에서 작성
+- 나의 경험, 감정, 생각, 고민을 중심으로 서술
+- 일기체처럼 자연스럽고 솔직하게
+- 완전한 문장으로 마무리 (중간에 끊기지 않게)
+- 90-100자 이내 완성된 내용
+- 부정적 감정도 있는 그대로 표현 (과도한 긍정화 금지)
 
-    let summaryText = '';
+compact 규칙 (장기 기억용 서버 저장):
+- 핵심 주제만 간결하게
+- 명사 중심 (동사/형용사 최소화)
+- 25-30자 이내
+- 이후 대화 맥락 제공용
+
+예시:
+{
+  "detailed": "나는 새로운 프로젝트에 대한 걱정과 기대감을 털어놨다. 실패할까봐 불안하기도 했지만, 도전해보고 싶다는 마음도 컸다.",
+  "compact": "프로젝트 불안감, 도전 의지, 감정 정리"
+}
+
+JSON 형식만 출력, 추가 설명 금지`;
+
+    let detailedSummary = '';
+    let compactSummary = '';
     setLoading(true);
 
-    // 1) 요약 호출 (먼저 localStorage에 임시 저장)
+    // 1) 요약 호출 (2가지 요약 동시 생성)
     const labelSumm = 'chat:summarize';
     const tSumm = performance.now();
     try {
@@ -1011,10 +1029,34 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
       if (!user || !user.id) {
         throw new Error('로그인이 필요한 기능입니다.');
       }
+
       const res = await chat({ conversation_id: id, user_id: user.id, content: summaryPrompt });
-      summaryText = (res.assistant || '').trim();
-      const concise = sanitizeSummary(summaryText);
-      logRes(labelSumm, { length: concise.length, preview: safeText(concise, { max: 60 }) }, tSumm);
+      const assistantReply = (res?.reply || res?.assistant || '').trim();
+
+      // JSON 파싱 시도
+      try {
+        const summaries = JSON.parse(assistantReply);
+        detailedSummary = summaries.detailed || '';
+        compactSummary = summaries.compact || '';
+
+        logGroup('summary-extraction', () => {
+          console.log('Detailed summary (100자):', detailedSummary);
+          console.log('Compact summary (30자):', compactSummary);
+        });
+
+        logRes(labelSumm, {
+          detailed_length: detailedSummary.length,
+          compact_length: compactSummary.length,
+          preview: safeText(detailedSummary, { max: 60 })
+        }, tSumm);
+
+      } catch (parseError) {
+        // JSON 파싱 실패 시 Fallback: 기존 방식
+        console.warn('Failed to parse summary JSON, using fallback:', assistantReply);
+        detailedSummary = assistantReply.substring(0, 100);
+        compactSummary = assistantReply.substring(0, 30);
+      }
+
     } catch (error) {
       logErr(labelSumm, error, tSumm);
       setLoading(false);
@@ -1029,62 +1071,18 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
     const labelImg = 'createImage';
     const tImg = performance.now();
     try {
-      const concise = sanitizeSummary(summaryText);
-      
+      // 🎯 개선: detailedSummary를 이미지 프롬프트 생성에 사용
+      const sanitizedDetail = sanitizeSummary(detailedSummary);
+
       // 사용자 메시지 기반 감정 분석하여 이미지 프롬프트 생성
       const userMessages = msgs.filter(m => m.role === 'user').map(m => m.content);
-      const imagePrompt = createEmotionBasedImagePrompt(concise, userMessages);
+      const imagePrompt = createEmotionBasedImagePrompt(sanitizedDetail, userMessages);
 
       // 영어 요약 추출 (사용자에게는 보이지 않지만 일관성을 위해 저장)
       const englishSummary = extractEnglishFromPrompt(imagePrompt);
 
-      // 🎯 개선: 키워드 및 고유명사 추출 (장기 기억 개선)
-      let keywords = null;
-      let entities = null;
-      try {
-        const keywordPrompt = `다음 일기를 핵심 키워드와 고유명사로 분석해줘.
-
-일기: "${concise}"
-
-응답 형식 (반드시 JSON만 출력):
-{
-  "keywords": "면접, 긴장, 불안",
-  "entities": ["삼성전자", "김철수"]
-}
-
-규칙:
-- keywords: 3-5개 명사, 최대 30자, 쉼표로 구분
-- entities: 회사명, 인물명, 장소명 등 고유명사 배열 (없으면 빈 배열)
-- JSON 형식만 출력, 추가 설명 금지`;
-
-        const keywordRes = await chat({
-          conversation_id: id,
-          user_id: user.id,
-          content: keywordPrompt
-        });
-
-        const assistantReply = keywordRes?.reply || keywordRes?.assistant || '';
-
-        // JSON 파싱 시도
-        try {
-          const extracted = JSON.parse(assistantReply.trim());
-          keywords = extracted.keywords || null;
-          entities = extracted.entities || null;
-
-          logGroup('keyword-extraction', () => {
-            console.log('Extracted keywords:', keywords);
-            console.log('Extracted entities:', entities);
-          });
-        } catch (parseError) {
-          console.warn('Failed to parse keyword extraction response:', assistantReply);
-        }
-      } catch (error) {
-        console.error('Keyword extraction failed:', error);
-        // 키워드 추출 실패해도 진행 (optional)
-      }
-
       logGroup(labelImg, () => logReq(labelImg, {
-        conversation_id: `[REDACTED summary: len=${concise.length}]`,
+        conversation_id: `[REDACTED summary: len=${sanitizedDetail.length}]`,
         prompt: '[REDACTED imagePrompt]'
       }));
 
@@ -1109,9 +1107,16 @@ Think: Emotional authenticity meets artistic beauty. Create something that feels
           prompt: imagePrompt,
           image_url: img.image_url
         });
-        
-        // Save conversation summary with English translation, keywords, and entities
-        await saveConversationSummary(id, concise, img.image_url, englishSummary, keywords, entities);
+
+        // 🎯 개선: 100자 detailed summary와 30자 compact summary 모두 저장
+        // detailedSummary: 사용자 표시용 (그림일기)
+        // compactSummary: 장기 기억용 (이후 대화 맥락 제공)
+        await saveConversationSummary(id, detailedSummary, img.image_url, englishSummary, compactSummary);
+
+        logGroup('summary-storage', () => {
+          console.log('Saved detailed summary (user-facing):', detailedSummary);
+          console.log('Saved compact summary (long-term memory):', compactSummary);
+        });
       } catch (error) {
         console.error('Failed to save to database:', error);
       }

@@ -5,8 +5,8 @@ export default function NavBar() {
   return (
     <nav style={styles.nav}>
       <Tab to="/home" label="Home" />
-      <Tab to="/history" label="History" />
       <Tab to="/chat" label="Chat" />
+      <Tab to="/calendar" label="Calendar" />
       <Tab to="/profile" label="Profile" />
     </nav>
   );

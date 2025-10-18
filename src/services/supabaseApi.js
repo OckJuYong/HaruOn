@@ -381,8 +381,8 @@ const analyzeInteractionPatterns = (conversations) => {
 };
 
 // --- Conversation Summary Functions ---
-// conversation_summaries 테이블이 없으므로 user_profiles의 JSONB를 활용
-export const saveConversationSummary = async (conversationId, summary, imageUrl = null, englishSummary = null) => {
+// 🎯 개선: 2가지 요약 저장 (100자 detailed + 30자 compact)
+export const saveConversationSummary = async (conversationId, detailedSummary, imageUrl = null, englishSummary = null, compactSummary = null) => {
   try {
     // 먼저 해당 conversation의 user_id를 가져옴
     const { data: conversation, error: convError } = await supabase
@@ -390,35 +390,37 @@ export const saveConversationSummary = async (conversationId, summary, imageUrl 
       .select('user_id')
       .eq('id', conversationId)
       .single();
-    
+
     if (convError) throw convError;
-    
+
     const userId = conversation.user_id;
-    
+
     // 현재 프로필 데이터 가져오기
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('profile_data')
       .eq('user_id', userId)
       .single();
-    
+
     let currentData = {};
     if (profile && profile.profile_data) {
       currentData = profile.profile_data;
     }
-    
+
     // conversation_summaries 데이터를 profile_data에 저장
     if (!currentData.conversation_summaries) {
       currentData.conversation_summaries = {};
     }
-    
+
     currentData.conversation_summaries[conversationId] = {
-      summary: summary,
-      english_summary: englishSummary, // 영어 요약 추가 (사용자에게는 보이지 않음)
+      summary: detailedSummary, // 🎯 100자 상세 요약 (사용자 표시용 - 그림일기)
+      detailed_summary: detailedSummary, // 명시적으로 detailed 저장
+      compact_summary: compactSummary, // 🎯 30자 핵심 요약 (장기 기억용 - 이후 대화 맥락 제공)
+      english_summary: englishSummary, // 영어 요약 (사용자에게는 보이지 않음)
       image_url: imageUrl,
       created_at: new Date().toISOString()
     };
-    
+
     // 업데이트 또는 삽입
     const { error } = await supabase
       .from('user_profiles')
@@ -428,10 +430,10 @@ export const saveConversationSummary = async (conversationId, summary, imageUrl 
         last_updated_at: new Date().toISOString()
       })
       .select();
-      
+
     if (error) throw error;
     return currentData.conversation_summaries[conversationId];
-    
+
   } catch (error) {
     console.error('Failed to save conversation summary:', error);
     throw error;
