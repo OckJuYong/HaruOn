@@ -473,3 +473,141 @@ export const getConversationSummary = async (conversationId) => {
     return null;
   }
 };
+
+// --- Cat Artist Profile Functions (이미지 개인화) ---
+
+// 🎨 고양이 아티스트 프로필 가져오기
+export const getCatArtistProfile = async (userId) => {
+  try {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('profile_data')
+      .eq('user_id', userId)
+      .single();
+
+    if (profile?.profile_data?.cat_artist_profile) {
+      return profile.profile_data.cat_artist_profile;
+    }
+
+    // 기본 프로필 반환 (초기 사용자)
+    return {
+      drawing_personality: 'friendly',
+      favorite_colors: [],
+      line_thickness: 'medium',
+      coloring_style: 'simple',
+      detail_level: 'minimal',
+      mood_tendency: 'neutral',
+      iterations: 0,
+      created_at: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Failed to get cat artist profile:', error);
+    return null;
+  }
+};
+
+// 🎨 고양이 아티스트 프로필 업데이트
+export const updateCatArtistProfile = async (userId, profileData) => {
+  try {
+    // 현재 프로필 데이터 가져오기
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('profile_data')
+      .eq('user_id', userId)
+      .single();
+
+    let currentData = {};
+    if (profile && profile.profile_data) {
+      currentData = profile.profile_data;
+    }
+
+    // cat_artist_profile 업데이트
+    currentData.cat_artist_profile = {
+      ...currentData.cat_artist_profile,
+      ...profileData,
+      last_updated: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('user_profiles')
+      .upsert({
+        user_id: userId,
+        profile_data: currentData,
+        last_updated_at: new Date().toISOString()
+      })
+      .select();
+
+    if (error) throw error;
+    return currentData.cat_artist_profile;
+  } catch (error) {
+    console.error('Failed to update cat artist profile:', error);
+    throw error;
+  }
+};
+
+// 🎨 이미지 생성 히스토리 저장
+export const saveImageHistory = async (userId, historyItem) => {
+  try {
+    // 현재 프로필 데이터 가져오기
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('profile_data')
+      .eq('user_id', userId)
+      .single();
+
+    let currentData = {};
+    if (profile && profile.profile_data) {
+      currentData = profile.profile_data;
+    }
+
+    // image_generation_history 배열에 추가
+    if (!currentData.image_generation_history) {
+      currentData.image_generation_history = [];
+    }
+
+    currentData.image_generation_history.push({
+      ...historyItem,
+      timestamp: new Date().toISOString()
+    });
+
+    // 최근 50개만 유지 (용량 관리)
+    if (currentData.image_generation_history.length > 50) {
+      currentData.image_generation_history = currentData.image_generation_history.slice(-50);
+    }
+
+    const { error } = await supabase
+      .from('user_profiles')
+      .upsert({
+        user_id: userId,
+        profile_data: currentData,
+        last_updated_at: new Date().toISOString()
+      })
+      .select();
+
+    if (error) throw error;
+    return currentData.image_generation_history;
+  } catch (error) {
+    console.error('Failed to save image history:', error);
+    throw error;
+  }
+};
+
+// 🎨 이미지 히스토리 가져오기
+export const getImageHistory = async (userId) => {
+  try {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('profile_data')
+      .eq('user_id', userId)
+      .single();
+
+    if (profile?.profile_data?.image_generation_history) {
+      return profile.profile_data.image_generation_history;
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Failed to get image history:', error);
+    return [];
+  }
+};

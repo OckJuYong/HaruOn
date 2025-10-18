@@ -4,7 +4,7 @@ import NavBar, { NAVBAR_HEIGHT } from '../components/NavBar';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { chat, listMessages, createConversation, createImage, saveImageToDb, saveConversationSummary, getUserPersonalization, updateUserPersonalization, analyzeUserPatterns } from '../api/api';
+import { chat, listMessages, createConversation, createImage, saveImageToDb, saveConversationSummary, getUserPersonalization, updateUserPersonalization, analyzeUserPatterns, getCatArtistProfile, updateCatArtistProfile, saveImageHistory, getImageHistory } from '../api/api';
 import { AdvancedPersonalizationEngine, learnFromUserInteraction, generateOptimalPrompt } from '../services/advancedPersonalization';
 import { ConversationPatternAnalyzer, analyzeAndUpdateUserPatterns } from '../services/conversationPatternAnalyzer';
 import IntimateFreindSystem from '../services/intimateFriendSystem';
@@ -855,7 +855,185 @@ export default function Chat() {
   }
 
 
-  // 감정 기반 이미지 프롬프트 생성
+  // 🎨 고양이 아티스트 스타일 분석
+  function analyzeCatArtistStyle(imageHistory) {
+    if (!imageHistory || imageHistory.length < 10) {
+      // 10개 미만: 기본 스타일
+      return null;
+    }
+
+    const emotions = imageHistory.map(img => img.emotion);
+    const colors = imageHistory.flatMap(img => img.colors || []);
+
+    // 긍정 비율 계산
+    const positiveEmotions = ['happy', 'excited', 'joyful'];
+    const positiveRate = emotions.filter(e => positiveEmotions.includes(e)).length / emotions.length;
+
+    // 따뜻한 색상 비율
+    const warmColors = ['orange', 'yellow', 'red', 'pink'];
+    const warmColorRate = colors.filter(c => warmColors.includes(c)).length / (colors.length || 1);
+
+    // 차가운 색상 비율
+    const coolColors = ['blue', 'mint', 'purple', 'gray'];
+    const coolColorRate = colors.filter(c => coolColors.includes(c)).length / (colors.length || 1);
+
+    // 고양이 성격 결정
+    let personality;
+    let favoriteColors;
+    let lineThickness;
+    let coloringStyle;
+
+    if (positiveRate > 0.7 && warmColorRate > 0.6) {
+      personality = 'enthusiastic_cheerful';
+      favoriteColors = ['orange', 'yellow', 'bright_pink'];
+      lineThickness = 'bold';
+      coloringStyle = 'vibrant_messy';
+    } else if (positiveRate < 0.3 || coolColorRate > 0.6) {
+      personality = 'gentle_calm';
+      favoriteColors = ['soft_blue', 'mint', 'lavender'];
+      lineThickness = 'soft';
+      coloringStyle = 'pastel_delicate';
+    } else {
+      personality = 'balanced_friendly';
+      favoriteColors = ['warm_orange', 'sky_blue', 'soft_yellow'];
+      lineThickness = 'medium';
+      coloringStyle = 'simple_charming';
+    }
+
+    return {
+      drawing_personality: personality,
+      favorite_colors: favoriteColors,
+      line_thickness: lineThickness,
+      coloring_style: coloringStyle,
+      detail_level: 'minimal',
+      mood_tendency: positiveRate > 0.6 ? 'cheerful' : positiveRate > 0.4 ? 'balanced' : 'calm',
+      iterations: imageHistory.length
+    };
+  }
+
+  // 🎨 고양이 아티스트 프롬프트 생성 (개인화)
+  async function createCatArtistPrompt(koreanSummary, userMessages, catProfile = null) {
+    // 한국어 요약을 영어로 번역
+    const translateToEnglish = (text) => {
+      const keywordMap = {
+        '기분': 'feeling', '감정': 'emotion', '행복': 'joy', '즐거운': 'delightful',
+        '시원': 'refreshing', '즐겁': 'cheerful', '좋은': 'wonderful', '편안': 'peaceful',
+        '따뜻': 'warm', '포근': 'cozy', '상쾌': 'fresh', '든든': 'comforting',
+        '고민': 'thoughtful', '어려움': 'difficult', '스트레스': 'stressful',
+        '힘든': 'tough', '아쉬운': 'regretful', '슬픈': 'sad', '우울한': 'melancholy',
+        '화나': 'angry', '짜증': 'annoyed', '열받': 'frustrated', '억울': 'unfair',
+        '일상': 'daily life', '대화': 'conversation', '친구': 'friend',
+        '가족': 'family', '일': 'work', '공부': 'study', '학습': 'learning',
+        '회사': 'office', '출근': 'commute', '프로젝트': 'project', '발표': 'presentation',
+        '휴식': 'rest', '음식': 'food', '요리': 'cooking',
+        '운동': 'exercise', '산책': 'walk', '여행': 'travel',
+        '집': 'home', '독서': 'reading', '영화': 'movie',
+        '아침': 'morning', '점심': 'lunch', '오후': 'afternoon',
+        '저녁': 'evening', '밤': 'night', '새벽': 'dawn',
+        '날씨': 'weather', '비': 'rain', '눈': 'snow',
+        '바람': 'wind', '햇살': 'sunlight',
+        '봄': 'spring', '여름': 'summer', '가을': 'autumn', '겨울': 'winter',
+        '공원': 'park', '카페': 'cafe', '도서관': 'library'
+      };
+
+      let translated = text;
+      Object.entries(keywordMap).forEach(([kr, en]) => {
+        const regex = new RegExp(kr, 'gi');
+        translated = translated.replace(regex, en);
+      });
+      return translated;
+    };
+
+    const englishSummary = translateToEnglish(koreanSummary);
+    const emotion = analyzeUserEmotion(userMessages);
+
+    // 베이스 프롬프트 (모든 사용자 공통)
+    let prompt = `A cute cat drew this scene with crayons in a childlike style.
+
+📝 SCENE: "${englishSummary}"
+
+🎨 BASE STYLE (Cat's Drawing):
+- Childlike crayon drawing aesthetic
+- Wobbly, imperfect lines that wiggle slightly
+- Colors slightly outside the lines (cute mistakes)
+- Simple, naive art style
+- Charming and endearing imperfections
+- Kindergarten-level drawing skill
+`;
+
+    // 사용자별 고양이 스타일 (10개 이상일 때)
+    if (catProfile && catProfile.iterations >= 10) {
+      const personalityDescriptions = {
+        'enthusiastic_cheerful': 'an enthusiastic and cheerful cat who loves bright colors',
+        'gentle_calm': 'a gentle and calm cat who prefers soft pastel tones',
+        'balanced_friendly': 'a friendly and balanced cat with diverse color choices'
+      };
+
+      prompt += `
+🐱 YOUR CAT ARTIST:
+This drawing was made by ${personalityDescriptions[catProfile.drawing_personality] || 'your personal cat friend'}.
+
+Cat's Signature Style:
+- Favorite colors: ${catProfile.favorite_colors.join(', ')}
+- Line style: ${catProfile.line_thickness} strokes
+- Coloring: ${catProfile.coloring_style}
+- Overall mood: ${catProfile.mood_tendency}
+`;
+    }
+
+    // 감정별 변형 (현재 대화 감정 반영)
+    const emotionElements = {
+      happy: {
+        elements: 'smiling elements, sunshine, happy symbols',
+        mood: 'joyful and bright'
+      },
+      sad: {
+        elements: 'gentle rain drops, soft clouds, quiet atmosphere',
+        mood: 'gentle and contemplative'
+      },
+      angry: {
+        elements: 'strong lines, storm clouds, dramatic elements',
+        mood: 'intense but honest'
+      },
+      excited: {
+        elements: 'sparkles, stars, energetic swirls',
+        mood: 'energetic and lively'
+      },
+      worried: {
+        elements: 'soft protective shapes, cozy elements',
+        mood: 'safe and comforting'
+      },
+      neutral: {
+        elements: 'balanced simple shapes, calm atmosphere',
+        mood: 'peaceful and centered'
+      }
+    };
+
+    const currentEmotion = emotionElements[emotion] || emotionElements.neutral;
+
+    prompt += `
+✨ TODAY'S MOOD:
+- Emotional elements: ${currentEmotion.elements}
+- Atmosphere: ${currentEmotion.mood}
+
+📐 COMPOSITION:
+- Simple, focused scene
+- Minimal background details
+- Cute and relatable
+- Hand-drawn warmth
+
+🚫 AVOID:
+- NO text or letters in the image
+- NO overly complex details
+- NO professional polished look
+- NO realistic photography style
+
+Think: A kindergarten cat drew a memory with love and crayons.`;
+
+    return prompt;
+  }
+
+  // 감정 기반 이미지 프롬프트 생성 (레거시 - 점진적 마이그레이션)
   function createEmotionBasedImagePrompt(koreanSummary, userMessages) {
     // 사용자 감정 분석
     const emotion = analyzeUserEmotion(userMessages);
@@ -1074,16 +1252,24 @@ JSON 형식만 출력, 추가 설명 금지`;
       // 🎯 개선: detailedSummary를 이미지 프롬프트 생성에 사용
       const sanitizedDetail = sanitizeSummary(detailedSummary);
 
+      // 🎨 고양이 아티스트 프로필 로드
+      const catProfile = await getCatArtistProfile(user.id);
+      const imageHistory = await getImageHistory(user.id);
+
       // 사용자 메시지 기반 감정 분석하여 이미지 프롬프트 생성
       const userMessages = msgs.filter(m => m.role === 'user').map(m => m.content);
-      const imagePrompt = createEmotionBasedImagePrompt(sanitizedDetail, userMessages);
+      const emotion = analyzeUserEmotion(userMessages);
+
+      // 🐱 고양이 아티스트 프롬프트 생성 (개인화)
+      const imagePrompt = await createCatArtistPrompt(sanitizedDetail, userMessages, catProfile);
 
       // 영어 요약 추출 (사용자에게는 보이지 않지만 일관성을 위해 저장)
       const englishSummary = extractEnglishFromPrompt(imagePrompt);
 
       logGroup(labelImg, () => logReq(labelImg, {
         conversation_id: `[REDACTED summary: len=${sanitizedDetail.length}]`,
-        prompt: '[REDACTED imagePrompt]'
+        prompt: '[REDACTED catArtistPrompt]',
+        catProfile: catProfile ? `iterations: ${catProfile.iterations}` : 'new user'
       }));
 
       // ✅ 오버레이 켜기
@@ -1113,9 +1299,40 @@ JSON 형식만 출력, 추가 설명 금지`;
         // compactSummary: 장기 기억용 (이후 대화 맥락 제공)
         await saveConversationSummary(id, detailedSummary, img.image_url, englishSummary, compactSummary);
 
+        // 🎨 이미지 생성 히스토리 저장 (스타일 학습용)
+        const emotionColors = {
+          happy: ['orange', 'yellow', 'pink'],
+          sad: ['blue', 'gray', 'purple'],
+          angry: ['red', 'orange', 'black'],
+          excited: ['pink', 'blue', 'gold'],
+          worried: ['brown', 'green', 'beige'],
+          neutral: ['blue', 'green', 'yellow']
+        };
+
+        await saveImageHistory(user.id, {
+          conversation_id: id,
+          emotion: emotion,
+          colors: emotionColors[emotion] || emotionColors.neutral,
+          summary: compactSummary
+        });
+
+        // 🎨 10개 이상이면 스타일 분석 후 프로필 업데이트
+        const updatedHistory = await getImageHistory(user.id);
+        if (updatedHistory.length >= 10) {
+          const analyzedStyle = analyzeCatArtistStyle(updatedHistory);
+          if (analyzedStyle) {
+            await updateCatArtistProfile(user.id, analyzedStyle);
+
+            logGroup('cat-artist-style', () => {
+              console.log('🎨 Cat artist style updated:', analyzedStyle);
+            });
+          }
+        }
+
         logGroup('summary-storage', () => {
           console.log('Saved detailed summary (user-facing):', detailedSummary);
           console.log('Saved compact summary (long-term memory):', compactSummary);
+          console.log('Saved image history:', { emotion, colors: emotionColors[emotion] });
         });
       } catch (error) {
         console.error('Failed to save to database:', error);

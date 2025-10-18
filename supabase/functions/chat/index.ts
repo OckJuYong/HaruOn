@@ -1,8 +1,48 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+}
+
+// Supabase 클라이언트 생성
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+)
+
+// 🎯 과거 대화 요약 가져오기 함수
+async function getRecentMemories(userId: string) {
+  try {
+    // user_profiles에서 conversation_summaries 가져오기
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('profile_data')
+      .eq('user_id', userId)
+      .single()
+
+    if (!profile?.profile_data?.conversation_summaries) {
+      return []
+    }
+
+    // 최근 5개의 compact_summary 추출
+    const summaries = Object.entries(profile.profile_data.conversation_summaries)
+      .map(([convId, summary]: [string, any]) => ({
+        id: convId,
+        compact: summary.compact_summary,
+        created_at: summary.created_at
+      }))
+      .filter(s => s.compact) // compact_summary가 있는 것만
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 5) // 최근 5개만
+      .map(s => s.compact)
+
+    return summaries
+  } catch (error) {
+    console.error('Failed to get memories:', error)
+    return []
+  }
 }
 
 serve(async (req) => {
@@ -16,8 +56,11 @@ serve(async (req) => {
     // 기존 방식과 동일하게 전체 메시지 컨텍스트 사용
     const chatMessages = messages?.items || []
 
+    // 🎯 과거 대화 요약 가져오기
+    const recentMemories = user_id ? await getRecentMemories(user_id) : []
+
     // 시스템 프롬프트: 친근하고 공감적인 대화 친구
-    const systemPrompt = `당신은 사용자의 따뜻하고 친근한 대화 친구입니다. 다음 원칙을 따라주세요:
+    let systemPrompt = `당신은 사용자의 따뜻하고 친근한 대화 친구입니다. 다음 원칙을 따라주세요:
 
 1. 친구처럼 편안하게 대화하기
    - 존댓말보다는 반말로 친근하게 (예: "그랬구나~", "힘들었겠다")
@@ -50,6 +93,18 @@ serve(async (req) => {
 
 ❌ "힘드신 상황이시군요. 스트레스 관리 방법을 찾아보시는 것이 좋겠습니다."
 ✅ "와 정말 힘들었겠다ㅠㅠ 그 상황에서 잘 버텨낸 것만으로도 대단해! 지금은 좀 괜찮아?"`;
+
+    // 🎯 과거 대화 기억 추가
+    if (recentMemories.length > 0) {
+      systemPrompt += `\n\n**[과거 대화 기억]**
+우리가 최근에 나눴던 대화들이야:
+${recentMemories.map((memory, i) => `${i + 1}. ${memory}`).join('\n')}
+
+이 기억들을 자연스럽게 활용해서 대화해줘:
+- 억지로 언급하지는 말고, 관련 있을 때만 자연스럽게 연결해
+- 예: "저번에 말했던 그거 어떻게 됐어?", "아 맞다, 전에 그런 얘기 했었잖아!"
+- 친구처럼 진짜 기억하고 있는 것처럼 말해줘`;
+    }
 
     // Gemini API 형식으로 메시지 변환
     const geminiMessages = chatMessages.map(msg => ({

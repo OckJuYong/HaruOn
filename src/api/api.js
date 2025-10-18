@@ -21,7 +21,11 @@ import {
   getConversationSummary,
   getUserPersonalization,
   updateUserPersonalization,
-  analyzeUserPatterns
+  analyzeUserPatterns,
+  getCatArtistProfile,
+  updateCatArtistProfile,
+  saveImageHistory,
+  getImageHistory
 } from '../services/supabaseApi'
 
 export {
@@ -47,5 +51,9 @@ export {
   getConversationSummary,
   getUserPersonalization,
   updateUserPersonalization,
-  analyzeUserPatterns
+  analyzeUserPatterns,
+  getCatArtistProfile,
+  updateCatArtistProfile,
+  saveImageHistory,
+  getImageHistory
 }
