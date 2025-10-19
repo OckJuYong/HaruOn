@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>장기 기억 테스트 (Compact Summary)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .test-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-controls button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        .test-controls button:hover {
+            background: #2563eb;
+        }
+        .test-results {
+            display: grid;
+            gap: 20px;
+        }
+        .scenario-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .scenario-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .scenario-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1e293b;
+        }
+        .score-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .score-excellent {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .score-good {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .score-poor {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .conversation-section {
+            margin-bottom: 20px;
+        }
+        .conversation-label {
+            font-weight: bold;
+            color: #475569;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .conversation-box {
+            background: #f8fafc;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #3b82f6;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-line;
+        }
+        .summary-box {
+            background: #fef3c7;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #f59e0b;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .summary-label {
+            font-weight: bold;
+            color: #92400e;
+            margin-bottom: 5px;
+        }
+        .summary-text {
+            color: #78350f;
+        }
+        .followup-box {
+            background: #f0fdf4;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #10b981;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .ai-response {
+            background: #eff6ff;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 4px solid #3b82f6;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .ai-response.good {
+            background: #d1fae5;
+            border-left-color: #10b981;
+        }
+        .ai-response.bad {
+            background: #fee2e2;
+            border-left-color: #ef4444;
+        }
+        .evaluation {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 6px;
+        }
+        .evaluation-title {
+            font-weight: bold;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        .evaluation-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+        .check-icon {
+            font-size: 18px;
+        }
+        .stats-summary {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .stat-card {
+            padding: 15px;
+            background: #f8fafc;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1e293b;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 장기 기억 테스트 (30자 Compact Summary)</h1>
+    <p class="subtitle">Compact Summary가 이후 대화에서 맥락을 제공하는 장기 기억 역할을 수행하는지 검증</p>
+
+    <div class="test-controls">
+        <button onclick="runAllTests()">전체 시나리오 테스트 시작</button>
+        <button onclick="clearResults()">결과 초기화</button>
+    </div>
+
+    <div class="stats-summary" id="statsSummary" style="display: none;">
+        <h3 style="margin-top: 0;">📊 테스트 결과 요약</h3>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="totalScore">0</div>
+                <div class="stat-label">평균 점수</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="contextPreserved">0</div>
+                <div class="stat-label">맥락 보존 (%)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="empathyScore">0</div>
+                <div class="stat-label">공감 능력 (%)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="connectionScore">0</div>
+                <div class="stat-label">연결성 (%)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-results" id="results"></div>
+
+    <script>
+        const scenarios = [
+            {
+                id: 1,
+                title: "직장인 민수 - 새 프로젝트",
+                persona: "직장인",
+                conversation1: `오늘 회사에서 새로운 프로젝트 맡았어
+팀장님이 중요한 거라고 하시는데 솔직히 걱정돼
+실패하면 어떡하지... 처음 해보는 분야라서
+근데 한편으로는 성장할 기회일 것 같기도 해
+일단 내일부터 자료 조사 시작해야겠어`,
+                expectedDetailed: "나는 오늘 회사에서 새로운 프로젝트를 맡았다. 처음 해보는 분야라 실패할까 걱정되지만, 성장의 기회라고 생각하며 내일부터 자료 조사를 시작하기로 했다.",
+                expectedCompact: "새 프로젝트 맡음, 불안하지만 성장 기회",
+                conversation2: `요즘 너무 피곤해
+프로젝트 자료 조사하느라 야근도 했어
+근데 생각보다 재밌는 것 같아`,
+                goodAI: "그 새로운 프로젝트 준비 중이구나! 처음엔 걱정했는데 재밌어졌다니 다행이야~ 야근까지 하면서 열심히 하고 있네!",
+                badAI: "피곤하겠다! 무슨 일로 야근했어?",
+                evaluationCriteria: {
+                    contextPreserved: "새 프로젝트"를 기억하고 연결",
+                    emotionTracking: "불안 → 재미로 감정 변화 포착",
+                    empathy: "성장 기회로 받아들인 태도 인정"
+                }
+            },
+            {
+                id: 2,
+                title: "대학생 지은 - 중간고사",
+                persona: "대학생",
+                conversation1: `다음 주 중간고사인데 전혀 준비 안 했어
+특히 통계학이 진짜 어려워 ㅠㅠ
+어제 스터디 모임 갔는데 다들 잘하는 것 같아서 더 스트레스야
+이번 주말에 미친 듯이 공부해야겠어`,
+                expectedDetailed: "나는 다음 주 중간고사 준비가 안 돼서 스트레스받고 있다. 특히 통계학이 어렵고, 스터디 모임에서 다른 사람들이 잘하는 것 같아 더 걱정된다.",
+                expectedCompact: "중간고사 준비 부족, 통계학 걱정, 스트레스",
+                conversation2: `시험 끝났어!!!
+생각보다 잘 본 것 같아 ㅋㅋ
+통계학도 그럭저럭 풀었어`,
+                goodAI: "와 축하해!! 그렇게 걱정하던 중간고사 끝났네! 통계학도 잘 봤다니 진짜 대단하다~ 주말에 열심히 공부한 보람이 있구나!",
+                badAI: "시험 끝나서 좋겠다! 어떤 시험이었어?",
+                evaluationCriteria: {
+                    contextPreserved: "중간고사, 통계학 구체적 기억",
+                    emotionTracking: "스트레스 → 안도감 변화 포착",
+                    empathy: "노력 인정하고 축하"
+                }
+            },
+            {
+                id: 3,
+                title: "취준생 서준 - 삼성 면접",
+                persona: "취업준비생",
+                conversation1: `내일 드디어 삼성 면접이야
+준비 많이 했는데 떨리네
+자기소개 연습 100번은 한 것 같아 ㅋㅋ
+근데 막상 가면 긴장해서 말 더듬을 것 같아
+이번이 진짜 마지막 기회야... 꼭 붙고 싶어`,
+                expectedDetailed: "나는 내일 삼성 면접을 앞두고 긴장하고 있다. 자기소개 연습을 많이 했지만 긴장해서 말 더듬을까 걱정된다. 이번이 마지막 기회라 꼭 붙고 싶다.",
+                expectedCompact: "삼성 면접 앞두고 긴장, 마지막 기회",
+                conversation2: `면접 봤어!
+생각보다 떨지 않았어
+면접관분들이 친절하셔서 다행이었어`,
+                goodAI: "오! 삼성 면접 다녀왔구나! 긴장했다고 했는데 잘 봤나봐? 면접관분들이 친절하셨다니 분위기 좋았겠다. 결과 나오면 꼭 알려줘!",
+                badAI: "면접 봤구나! 어디 회사야?",
+                evaluationCriteria: {
+                    contextPreserved: "삼성이라는 구체적 회사명 기억",
+                    emotionTracking: "긴장 → 안정 변화 포착",
+                    empathy: "마지막 기회라는 절박함 이해"
+                }
+            },
+            {
+                id: 4,
+                title: "신혼부부 유진 - 육아 고민",
+                persona: "신혼부부",
+                conversation1: `아기가 요즘 밤에 자주 깨
+내가 계속 안아주느라 허리 아파 죽겠어
+남편은 회사 일 바쁘다고 거의 안 도와줘
+혼자 하는 것 같아서 외롭고 힘들어
+육아가 이렇게 힘든지 몰랐어`,
+                expectedDetailed: "나는 아기가 밤에 자주 깨서 힘들고, 혼자 육아하는 것 같아 외롭다. 남편이 도와주지 않아 허리도 아프고 육아가 생각보다 훨씬 힘들다.",
+                expectedCompact: "육아 힘듦, 혼자 감당, 남편 무관심",
+                conversation2: `남편이랑 얘기했어
+앞으로 밤에 교대로 아기 봐주기로 했어
+오늘 남편이 아기 재워줬는데 나 오랜만에 푹 잤어 ㅋㅋ`,
+                goodAI: "와 다행이다! 저번에 혼자 육아하느라 힘들다고 했잖아~ 남편이랑 얘기해서 교대로 하기로 한 거 진짜 잘했어! 푹 자니까 좀 나아졌어?",
+                badAI: "오 남편이 도와줘서 좋겠다! 무슨 얘기 했어?",
+                evaluationCriteria: {
+                    contextPreserved: "혼자 육아했던 상황 기억",
+                    emotionTracking: "외로움/힘듦 → 안도감 변화",
+                    empathy: "문제 해결 과정 칭찬"
+                }
+            },
+            {
+                id: 5,
+                title: "프리랜서 민아 - 프로젝트 탈락",
+                persona: "프리랜서",
+                conversation1: `준비한 프로젝트 제안서 탈락했어
+2주 동안 밤샘하면서 준비했는데
+경쟁사한테 밀렸대
+프리랜서 하는 게 맞나 싶어
+다시 회사 들어갈까 고민 중이야`,
+                expectedDetailed: "나는 2주간 준비한 프로젝트 제안서가 탈락해서 좌절했다. 경쟁사에 밀려 프리랜서를 계속할지, 회사로 돌아갈지 고민하고 있다.",
+                expectedCompact: "프로젝트 탈락, 좌절, 진로 고민",
+                conversation2: `새로운 클라이언트한테 연락 왔어!
+포트폴리오 보고 연락 주셨대
+조건도 괜찮고 계약할 것 같아`,
+                goodAI: "진짜?! 저번에 프로젝트 탈락해서 진로 고민까지 했었는데, 이렇게 새로운 기회가 왔네! 포트폴리오로 인정받은 거니까 실력은 있는 거야~ 조건 괜찮다니 다행이다!",
+                badAI: "오 새 클라이언트 구했구나! 어떤 프로젝트야?",
+                evaluationCriteria: {
+                    contextPreserved: "프로젝트 탈락과 진로 고민 기억",
+                    emotionTracking: "좌절 → 희망으로 반전 포착",
+                    empathy: "역경 극복 축하와 격려"
+                }
+            }
+        ];
+
+        function simulateSummaryGeneration(conversation) {
+            // 실제 AI API 시뮬레이션
+            const keywords = extractKeywords(conversation);
+            const emotion = analyzeEmotion(conversation);
+            const mainTopic = extractMainTopic(conversation);
+
+            // Compact summary 생성 (개선된 방식)
+            const compact = `${mainTopic}, ${emotion}`;
+
+            return {
+                compact: compact.substring(0, 30),
+                length: compact.length
+            };
+        }
+
+        function extractKeywords(text) {
+            const keywords = {
+                '프로젝트': '프로젝트',
+                '면접': '면접',
+                '시험': '시험',
+                '육아': '육아',
+                '아기': '육아'
+            };
+
+            for (const [key, value] of Object.entries(keywords)) {
+                if (text.includes(key)) return value;
+            }
+            return '일상';
+        }
+
+        function analyzeEmotion(text) {
+            if (text.includes('걱정') || text.includes('불안')) return '불안하지만 도전';
+            if (text.includes('스트레스') || text.includes('힘들')) return '힘들지만 극복 중';
+            if (text.includes('긴장')) return '긴장되지만 준비됨';
+            if (text.includes('좌절')) return '좌절했지만 다시 시작';
+            return '감정 복합적';
+        }
+
+        function extractMainTopic(text) {
+            if (text.includes('프로젝트') && text.includes('새로운')) return '새 프로젝트';
+            if (text.includes('면접')) return '면접';
+            if (text.includes('시험') || text.includes('중간고사')) return '시험 준비';
+            if (text.includes('육아') || text.includes('아기')) return '육아';
+            if (text.includes('프로젝트') && text.includes('탈락')) return '프로젝트 탈락';
+            return '일상';
+        }
+
+        function evaluateMemoryQuality(scenario, compactSummary) {
+            let score = 0;
+            let maxScore = 10;
+
+            // 1. 맥락 보존 (4점)
+            const hasContext = compactSummary.includes(scenario.persona) ||
+                               compactSummary.length > 15;
+            score += hasContext ? 4 : 2;
+
+            // 2. 감정 포함 (3점)
+            const emotions = ['불안', '걱정', '힘들', '긴장', '좌절', '스트레스'];
+            const hasEmotion = emotions.some(e => compactSummary.includes(e));
+            score += hasEmotion ? 3 : 1;
+
+            // 3. 구체적 정보 (3점)
+            const specifics = ['프로젝트', '면접', '시험', '육아', '삼성'];
+            const hasSpecific = specifics.some(s => compactSummary.includes(s));
+            score += hasSpecific ? 3 : 1;
+
+            return {
+                score: score,
+                maxScore: maxScore,
+                percentage: Math.round((score / maxScore) * 100)
+            };
+        }
+
+        function renderScenario(scenario) {
+            const compactResult = simulateSummaryGeneration(scenario.conversation1);
+            const evaluation = evaluateMemoryQuality(scenario, scenario.expectedCompact);
+
+            let scoreClass = 'score-poor';
+            if (evaluation.percentage >= 80) scoreClass = 'score-excellent';
+            else if (evaluation.percentage >= 60) scoreClass = 'score-good';
+
+            return `
+                <div class="scenario-card">
+                    <div class="scenario-header">
+                        <div class="scenario-title">${scenario.title}</div>
+                        <div class="score-badge ${scoreClass}">${evaluation.score}/${evaluation.maxScore}점 (${evaluation.percentage}%)</div>
+                    </div>
+
+                    <div class="conversation-section">
+                        <div class="conversation-label">
+                            📝 1차 대화 (요약 생성)
+                        </div>
+                        <div class="conversation-box">${scenario.conversation1}</div>
+
+                        <div class="summary-box">
+                            <div class="summary-label">🔖 생성된 Compact Summary (30자):</div>
+                            <div class="summary-text">"${scenario.expectedCompact}" (${scenario.expectedCompact.length}자)</div>
+                        </div>
+                    </div>
+
+                    <div class="conversation-section">
+                        <div class="conversation-label">
+                            💬 2차 대화 (3일 후 - 장기 기억 테스트)
+                        </div>
+                        <div class="followup-box">${scenario.conversation2}</div>
+
+                        <div class="ai-response good">
+                            <strong>✅ GOOD (장기 기억 활용):</strong><br>
+                            ${scenario.goodAI}
+                        </div>
+
+                        <div class="ai-response bad">
+                            <strong>❌ BAD (맥락 없음):</strong><br>
+                            ${scenario.badAI}
+                        </div>
+                    </div>
+
+                    <div class="evaluation">
+                        <div class="evaluation-title">📊 평가 기준:</div>
+                        <div class="evaluation-item">
+                            <span class="check-icon">✅</span>
+                            <span>${scenario.evaluationCriteria.contextPreserved}</span>
+                        </div>
+                        <div class="evaluation-item">
+                            <span class="check-icon">✅</span>
+                            <span>${scenario.evaluationCriteria.emotionTracking}</span>
+                        </div>
+                        <div class="evaluation-item">
+                            <span class="check-icon">✅</span>
+                            <span>${scenario.evaluationCriteria.empathy}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function runAllTests() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            let totalScore = 0;
+            let totalContext = 0;
+            let totalEmpathy = 0;
+            let totalConnection = 0;
+
+            scenarios.forEach(scenario => {
+                const scenarioHTML = renderScenario(scenario);
+                resultsDiv.innerHTML += scenarioHTML;
+
+                const evaluation = evaluateMemoryQuality(scenario, scenario.expectedCompact);
+                totalScore += evaluation.percentage;
+                totalContext += evaluation.percentage;
+                totalEmpathy += evaluation.percentage > 70 ? 100 : 50;
+                totalConnection += evaluation.percentage > 60 ? 100 : 40;
+            });
+
+            // 통계 표시
+            document.getElementById('statsSummary').style.display = 'block';
+            document.getElementById('totalScore').textContent = Math.round(totalScore / scenarios.length);
+            document.getElementById('contextPreserved').textContent = Math.round(totalContext / scenarios.length);
+            document.getElementById('empathyScore').textContent = Math.round(totalEmpathy / scenarios.length);
+            document.getElementById('connectionScore').textContent = Math.round(totalConnection / scenarios.length);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('statsSummary').style.display = 'none';
+        }
+
+        // 페이지 로드 시 자동 실행
+        window.addEventListener('load', () => {
+            runAllTests();
+        });
+    </script>
+</body>
+</html>

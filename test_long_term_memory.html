@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>장기 기억 시스템 테스트</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 {
+      color: #667eea;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      border-left: 4px solid #667eea;
+    }
+    .section h2 {
+      margin-top: 0;
+      color: #333;
+      font-size: 18px;
+    }
+    .status {
+      display: inline-block;
+      padding: 5px 12px;
+      border-radius: 15px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+    .status.ready { background: #d1f4e0; color: #0d7d42; }
+    .status.running { background: #fff3cd; color: #856404; }
+    .status.success { background: #d1ecf1; color: #0c5460; }
+    .status.error { background: #f8d7da; color: #721c24; }
+
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: transform 0.2s;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .test-scenario {
+      background: white;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+    }
+    .test-scenario h3 {
+      margin: 0 0 10px 0;
+      color: #667eea;
+      font-size: 16px;
+    }
+    .conversation-history {
+      background: #f1f3f4;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 13px;
+      margin: 10px 0;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .memory-item {
+      background: white;
+      padding: 8px 12px;
+      margin: 5px 0;
+      border-radius: 5px;
+      border-left: 3px solid #667eea;
+      font-size: 13px;
+    }
+    .result {
+      margin-top: 10px;
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .result.success {
+      background: #d1f4e0;
+      border: 1px solid #0d7d42;
+      color: #0d7d42;
+    }
+    .result.fail {
+      background: #f8d7da;
+      border: 1px solid #721c24;
+      color: #721c24;
+    }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-left: 10px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 20px;
+    }
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #667eea;
+      margin: 10px 0;
+    }
+    .stat-label {
+      font-size: 13px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .log {
+      background: #1e1e1e;
+      color: #00ff00;
+      padding: 15px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 15px;
+    }
+    .log-entry {
+      margin: 3px 0;
+    }
+    .log-entry.error {
+      color: #ff6b6b;
+    }
+    .log-entry.success {
+      color: #51cf66;
+    }
+    .log-entry.info {
+      color: #74c0fc;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧠 장기 기억 시스템 테스트</h1>
+    <p class="subtitle">사용자 20명 × 200일 대화 시뮬레이션</p>
+
+    <!-- 통계 -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-label">테스트 사용자</div>
+        <div class="stat-value" id="userCount">20</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">시뮬레이션 기간</div>
+        <div class="stat-value" id="dayCount">200</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">생성된 대화</div>
+        <div class="stat-value" id="convCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">저장된 요약</div>
+        <div class="stat-value" id="summaryCount">0</div>
+      </div>
+    </div>
+
+    <!-- Step 1: 데이터 생성 -->
+    <div class="section">
+      <h2>Step 1: 테스트 데이터 생성 <span class="status ready" id="status1">대기</span></h2>
+      <p>20명의 가상 사용자가 200일간 나눈 대화 데이터를 생성합니다.</p>
+      <button onclick="generateTestData()" id="btn1">데이터 생성 시작</button>
+      <div id="result1"></div>
+    </div>
+
+    <!-- Step 2: DB 저장 -->
+    <div class="section">
+      <h2>Step 2: DB에 저장 <span class="status ready" id="status2">대기</span></h2>
+      <p>생성된 대화와 요약을 Supabase에 저장합니다.</p>
+      <button onclick="saveToDatabase()" id="btn2" disabled>DB에 저장</button>
+      <div id="result2"></div>
+    </div>
+
+    <!-- Step 3: 기억 테스트 -->
+    <div class="section">
+      <h2>Step 3: 장기 기억 테스트 <span class="status ready" id="status3">대기</span></h2>
+      <p>Edge Function이 과거 대화를 기억하는지 테스트합니다.</p>
+      <button onclick="testMemory()" id="btn3" disabled>기억 테스트 실행</button>
+      <div id="result3"></div>
+    </div>
+
+    <!-- 로그 -->
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://ooafoofzmowsbtbhticw.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vYWZvb2Z6bW93c2J0Ymh0aWN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUyNjcxODUsImV4cCI6MjA0MDg0MzE4NX0.rhkHBLdqJmrYvWn0E8QZbCqBNSBdKGVW-_Ht-1vvA68';
+
+    let testData = [];
+    let savedConversations = [];
+
+    // 시나리오 템플릿 (200일간의 다양한 대화)
+    const scenarios = [
+      { day: 1, user: "오늘 새로운 회사에 첫 출근했어", compact: "첫 출근, 긴장됨" },
+      { day: 3, user: "첫 프로젝트 배정받았는데 떨려", compact: "새 프로젝트 시작, 부담됨" },
+      { day: 7, user: "동료들이 생각보다 친절해서 다행이야", compact: "동료들 친절, 적응 중" },
+      { day: 14, user: "프로젝트 중간 발표 잘 끝났어!", compact: "발표 성공, 뿌듯함" },
+      { day: 30, user: "한 달 차 드디어 적응된 것 같아", compact: "적응 완료, 자신감" },
+      { day: 45, user: "팀장님이 승진 제안했어", compact: "승진 제안받음" },
+      { day: 60, user: "승진 결정했어! 다음 달부터 팀리더", compact: "승진 확정, 기대됨" },
+      { day: 90, user: "팀리더 3개월 차, 생각보다 힘들다", compact: "리더 역할 부담" },
+      { day: 120, user: "팀원이랑 갈등 생겨서 스트레스야", compact: "팀 갈등, 스트레스" },
+      { day: 150, user: "갈등 해결했어! 솔직하게 대화했더니", compact: "갈등 해결, 후련함" },
+      { day: 180, user: "연말 평가 A등급 받았어", compact: "평가 우수, 보람" },
+      { day: 200, user: "1년 회고하니 정말 많이 성장했어", compact: "1년 성장, 감회" }
+    ];
+
+    function log(message, type = 'info') {
+      const logDiv = document.getElementById('log');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const timestamp = new Date().toLocaleTimeString();
+      entry.textContent = `[${timestamp}] ${message}`;
+      logDiv.appendChild(entry);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    // Step 1: 테스트 데이터 생성
+    async function generateTestData() {
+      document.getElementById('status1').textContent = '진행중';
+      document.getElementById('status1').className = 'status running';
+      document.getElementById('btn1').disabled = true;
+
+      log('테스트 데이터 생성 시작...', 'info');
+      testData = [];
+
+      // 20명의 사용자 생성
+      for (let userId = 1; userId <= 20; userId++) {
+        const userEmail = `test_user_${userId}@test.com`;
+
+        // 각 사용자마다 시나리오 중 일부 선택
+        const userScenarios = scenarios.filter((_, i) => (userId + i) % 3 === 0);
+
+        for (const scenario of userScenarios) {
+          const conversation = {
+            user_id: `test-user-${userId}`,
+            user_email: userEmail,
+            day: scenario.day,
+            user_message: scenario.user,
+            compact_summary: scenario.compact,
+            detailed_summary: `나는 ${scenario.user}. ${scenario.compact}를 느꼈다.`
+          };
+
+          testData.push(conversation);
+        }
+      }
+
+      log(`✓ ${testData.length}개의 대화 시나리오 생성 완료`, 'success');
+      document.getElementById('convCount').textContent = testData.length;
+
+      const resultDiv = document.getElementById('result1');
+      resultDiv.innerHTML = `
+        <div class="result success">
+          <strong>✓ 생성 완료!</strong><br>
+          • 사용자: 20명<br>
+          • 대화: ${testData.length}개<br>
+          • 시뮬레이션 기간: 200일
+        </div>
+      `;
+
+      document.getElementById('status1').textContent = '완료';
+      document.getElementById('status1').className = 'status success';
+      document.getElementById('btn2').disabled = false;
+    }
+
+    // Step 2: DB 저장
+    async function saveToDatabase() {
+      document.getElementById('status2').textContent = '진행중';
+      document.getElementById('status2').className = 'status running';
+      document.getElementById('btn2').disabled = true;
+
+      log('Supabase에 데이터 저장 시작...', 'info');
+
+      try {
+        // 사용자별로 그룹화
+        const userGroups = {};
+        testData.forEach(conv => {
+          if (!userGroups[conv.user_id]) {
+            userGroups[conv.user_id] = [];
+          }
+          userGroups[conv.user_id].push(conv);
+        });
+
+        let totalSaved = 0;
+
+        // 각 사용자의 데이터를 profile_data에 저장
+        for (const [userId, conversations] of Object.entries(userGroups)) {
+          const profileData = {
+            conversation_summaries: {}
+          };
+
+          conversations.forEach((conv, index) => {
+            const convId = `conv-${userId}-${conv.day}`;
+            profileData.conversation_summaries[convId] = {
+              compact_summary: conv.compact_summary,
+              detailed_summary: conv.detailed_summary,
+              summary: conv.detailed_summary,
+              created_at: new Date(Date.now() - (200 - conv.day) * 24 * 60 * 60 * 1000).toISOString()
+            };
+          });
+
+          // Supabase에 저장 (실제 API 호출)
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/user_profiles`, {
+            method: 'POST',
+            headers: {
+              'apikey': SUPABASE_ANON_KEY,
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=merge-duplicates'
+            },
+            body: JSON.stringify({
+              user_id: userId,
+              profile_data: profileData,
+              last_updated_at: new Date().toISOString()
+            })
+          });
+
+          if (response.ok) {
+            totalSaved += conversations.length;
+            log(`✓ ${userId}: ${conversations.length}개 대화 저장 완료`, 'success');
+          } else {
+            const error = await response.text();
+            log(`✗ ${userId} 저장 실패: ${error}`, 'error');
+          }
+        }
+
+        document.getElementById('summaryCount').textContent = totalSaved;
+
+        const resultDiv = document.getElementById('result2');
+        resultDiv.innerHTML = `
+          <div class="result success">
+            <strong>✓ DB 저장 완료!</strong><br>
+            • 저장된 요약: ${totalSaved}개<br>
+            • 사용자: ${Object.keys(userGroups).length}명
+          </div>
+        `;
+
+        document.getElementById('status2').textContent = '완료';
+        document.getElementById('status2').className = 'status success';
+        document.getElementById('btn3').disabled = false;
+
+      } catch (error) {
+        log(`✗ 저장 오류: ${error.message}`, 'error');
+
+        const resultDiv = document.getElementById('result2');
+        resultDiv.innerHTML = `
+          <div class="result fail">
+            <strong>✗ 저장 실패</strong><br>
+            ${error.message}
+          </div>
+        `;
+
+        document.getElementById('status2').textContent = '실패';
+        document.getElementById('status2').className = 'status error';
+      }
+    }
+
+    // Step 3: 기억 테스트
+    async function testMemory() {
+      document.getElementById('status3').textContent = '진행중';
+      document.getElementById('status3').className = 'status running';
+      document.getElementById('btn3').disabled = true;
+
+      log('장기 기억 테스트 시작...', 'info');
+
+      const testCases = [
+        {
+          user_id: 'test-user-1',
+          message: '오늘도 회사 잘 다녀왔어',
+          expectedMemory: '첫 출근'
+        },
+        {
+          user_id: 'test-user-5',
+          message: '프로젝트 진행 상황 물어봐줄래?',
+          expectedMemory: '프로젝트'
+        },
+        {
+          user_id: 'test-user-10',
+          message: '요즘 어때?',
+          expectedMemory: '승진'
+        }
+      ];
+
+      let passCount = 0;
+      let failCount = 0;
+      const results = [];
+
+      for (const testCase of testCases) {
+        try {
+          // Edge Function 호출
+          const response = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({
+              user_id: testCase.user_id,
+              content: testCase.message,
+              messages: { items: [] },
+              conversation_id: 'test-conv'
+            })
+          });
+
+          const data = await response.json();
+          const aiReply = data.reply || '';
+
+          // 과거 기억을 언급했는지 확인
+          const mentionsMemory = aiReply.includes('저번') ||
+                                 aiReply.includes('전에') ||
+                                 aiReply.includes('말했') ||
+                                 aiReply.toLowerCase().includes(testCase.expectedMemory.toLowerCase());
+
+          if (mentionsMemory) {
+            passCount++;
+            log(`✓ ${testCase.user_id}: 과거 기억 활용 성공!`, 'success');
+            results.push({
+              user: testCase.user_id,
+              status: 'success',
+              message: testCase.message,
+              reply: aiReply
+            });
+          } else {
+            failCount++;
+            log(`✗ ${testCase.user_id}: 과거 기억 미활용`, 'error');
+            results.push({
+              user: testCase.user_id,
+              status: 'fail',
+              message: testCase.message,
+              reply: aiReply
+            });
+          }
+
+        } catch (error) {
+          failCount++;
+          log(`✗ ${testCase.user_id} 테스트 오류: ${error.message}`, 'error');
+        }
+      }
+
+      // 결과 표시
+      let resultHTML = `
+        <div class="result ${passCount > failCount ? 'success' : 'fail'}">
+          <strong>${passCount > failCount ? '✓ 테스트 통과' : '✗ 테스트 실패'}</strong><br>
+          • 성공: ${passCount}/${testCases.length}<br>
+          • 실패: ${failCount}/${testCases.length}
+        </div>
+      `;
+
+      results.forEach(r => {
+        resultHTML += `
+          <div class="test-scenario">
+            <h3>${r.user} ${r.status === 'success' ? '✓' : '✗'}</h3>
+            <div><strong>질문:</strong> ${r.message}</div>
+            <div class="conversation-history"><strong>AI 답변:</strong> ${r.reply}</div>
+          </div>
+        `;
+      });
+
+      document.getElementById('result3').innerHTML = resultHTML;
+
+      document.getElementById('status3').textContent = passCount > failCount ? '성공' : '실패';
+      document.getElementById('status3').className = passCount > failCount ? 'status success' : 'status error';
+
+      log(`테스트 완료: ${passCount}/${testCases.length} 성공`, passCount > failCount ? 'success' : 'error');
+    }
+  </script>
+</body>
+</html>
